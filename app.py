@@ -65,7 +65,7 @@ def get_all_servers():
         list: Danh sách các máy chủ với thông tin trạng thái
     """
     collection = get_mongo_collection()
-    if not collection:
+    if collection is None:
         return []
     
     try:
