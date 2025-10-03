@@ -139,7 +139,7 @@ def api_profit(ten_may):
     try:
         # Query the money_monitor collection for the latest entry for this ten_may
         money_collection = collection.database['money_monitor']
-        report = money_collection.find_one({"ten_may": ten_may}, sort=[("time", -1]))
+        report = money_collection.find_one({"ten_may": ten_may}, sort=[("time", -1)])  # Find the latest entry
         
         if report:
             return jsonify({
