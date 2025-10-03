@@ -69,6 +69,9 @@ def get_all_servers():
         result = []
         for server in servers:
             last_update = server.get('cap_nhat_luc')
+            # Make last_update timezone-aware if it's naive
+            if last_update and last_update.tzinfo is None:
+                last_update = last_update.replace(tzinfo=timezone.utc)
             online = is_server_online(last_update)
             
             # Tính thời gian từ lần cập nhật cuối
