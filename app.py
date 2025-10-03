@@ -9,14 +9,13 @@ Deploy lên Render.com
 from flask import Flask, render_template, jsonify
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 
 app = Flask(__name__)
 
 # MongoDB Configuration
 # ⚠️ IMPORTANT: Set MONGO_URI as environment variable on Render
-# Never commit real credentials to Git!
 MONGO_URI = os.environ.get('MONGO_URI', 'mongodb+srv://username:password@cluster.mongodb.net/?retryWrites=true&w=majority')
 DB_NAME = os.environ.get('DB_NAME', 'HtechVolam')
 COLLECTION_NAME = os.environ.get('COLLECTION_NAME', 'server_status')
@@ -33,7 +32,7 @@ def get_mongo_collection():
         collection = db[COLLECTION_NAME]
         return collection
     except Exception as e:
-        print(f"❌ Lỗi kết nối MongoDB: {e}")
+        print(f" Lỗi kết nối MongoDB: {e}")
         return None
 
 
@@ -50,7 +49,7 @@ def is_server_online(last_update):
     if not last_update:
         return False
     
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     time_diff = now - last_update
     
     # Online nếu cập nhật trong vòng 70 phút
@@ -60,9 +59,6 @@ def is_server_online(last_update):
 def get_all_servers():
     """
     Lấy danh sách tất cả máy chủ và trạng thái
-    
-    Returns:
-        list: Danh sách các máy chủ với thông tin trạng thái
     """
     collection = get_mongo_collection()
     if collection is None:
@@ -70,7 +66,6 @@ def get_all_servers():
     
     try:
         servers = list(collection.find().sort("cap_nhat_luc", -1))
-        
         result = []
         for server in servers:
             last_update = server.get('cap_nhat_luc')
@@ -79,7 +74,7 @@ def get_all_servers():
             # Tính thời gian từ lần cập nhật cuối
             time_ago = ""
             if last_update:
-                time_diff = datetime.now() - last_update
+                time_diff = datetime.now(timezone.utc) - last_update
                 minutes = int(time_diff.total_seconds() / 60)
                 hours = int(minutes / 60)
                 
@@ -100,7 +95,7 @@ def get_all_servers():
         
         return result
     except Exception as e:
-        print(f"❌ Lỗi lấy dữ liệu: {e}")
+        print(f" Lỗi lấy dữ liệu: {e}")
         return []
 
 
@@ -144,7 +139,7 @@ def api_profit(ten_may):
     try:
         # Query the money_monitor collection for the latest entry for this ten_may
         money_collection = collection.database['money_monitor']
-        report = money_collection.find_one({"ten_may": ten_may}, sort=[("time", -1)])
+        report = money_collection.find_one({"ten_may": ten_may}, sort=[("time", -1]))
         
         if report:
             return jsonify({
@@ -156,14 +151,14 @@ def api_profit(ten_may):
         else:
             return jsonify({'error': f'Không tìm thấy báo cáo cho máy {ten_may}'}), 404
     except Exception as e:
-        print(f"❌ Lỗi lấy báo cáo lợi nhuận: {e}")
+        print(f" Lỗi lấy báo cáo lợi nhuận: {e}")
         return jsonify({'error': str(e)}), 500
 
 
 @app.route('/health')
 def health():
     """Health check endpoint cho Render"""
-    return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
+    return jsonify({'status': 'healthy', 'timestamp': datetime.now(timezone.utc).isoformat()})
 
 
 if __name__ == '__main__':
