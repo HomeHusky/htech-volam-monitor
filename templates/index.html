@@ -312,9 +312,108 @@
             animation: spin 1s linear infinite;
         }
 
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+        /* Profit Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 0;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 1000px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            animation: modalFadeIn 0.3s ease;
+        }
+
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: translateY(-50px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .modal-header {
+            padding: 20px 30px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            color: #333;
+        }
+
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover {
+            color: #666;
+        }
+
+        .modal-body {
+            padding: 30px;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .profit-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .profit-table th, .profit-table td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+
+        .profit-table th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .profit-table tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+
+        .profit-table tr:hover {
+            background-color: #e9ecef;
+        }
+
+        .profit-positive {
+            color: #10b981;
+            font-weight: bold;
+        }
+
+        .profit-negative {
+            color: #ef4444;
+            font-weight: bold;
+        }
+
+        .profit-zero {
+            color: #6b7280;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #666;
         }
     </style>
 </head>
@@ -353,7 +452,7 @@
         {% if servers %}
         <div class="servers-grid">
             {% for server in servers %}
-            <div class="server-card {% if server.online %}online{% else %}offline{% endif %}">
+            <div class="server-card {% if server.online %}online{% else %}offline{% endif %}" onclick="showProfit('{{ server.ten_may }}')">
                 <div class="server-header">
                     <div class="server-name">{{ server.ten_may }}</div>
                     <div class="status-badge {% if server.online %}online{% else %}offline{% endif %}">
@@ -435,6 +534,21 @@
         </div>
     </div>
 
+    <!-- Profit Modal -->
+    <div id="profitModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Chi tiết lợi nhuận</h2>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="modal-content">
+                    <div class="no-data">Đang tải dữ liệu...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Auto refresh every 30 minutes (1800000ms)
         const AUTO_REFRESH_TIME = 1800000; // 30 minutes
@@ -486,23 +600,79 @@
             location.reload();
         }
 
-        // Add animation on load
-        document.addEventListener('DOMContentLoaded', function() {
-            // Start auto refresh countdown
-            startAutoRefresh();
+        function closeModal() {
+            document.getElementById('profitModal').style.display = 'none';
+        }
 
-            // Animate cards
-            const cards = document.querySelectorAll('.server-card, .stat-card');
-            cards.forEach((card, index) => {
-                card.style.opacity = '0';
-                card.style.transform = 'translateY(20px)';
-                setTimeout(() => {
-                    card.style.transition = 'all 0.5s ease';
-                    card.style.opacity = '1';
-                    card.style.transform = 'translateY(0)';
-                }, index * 50);
-            });
-        });
+        function showProfit(ten_may) {
+            const modal = document.getElementById('profitModal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalContent = document.getElementById('modal-content');
+            
+            modalTitle.textContent = `Chi tiết lợi nhuận - ${ten_may}`;
+            modalContent.innerHTML = '<div class="no-data">Đang tải dữ liệu...</div>';
+            modal.style.display = 'block';
+            
+            // Fetch profit data
+            fetch(`/api/profit/${ten_may}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        modalContent.innerHTML = `<div class="no-data">${data.error}</div>`;
+                        return;
+                    }
+                    
+                    if (!data.report || data.report.length === 0) {
+                        modalContent.innerHTML = '<div class="no-data">Không có dữ liệu lợi nhuận</div>';
+                        return;
+                    }
+                    
+                    // Create table
+                    let html = `
+                        <p><strong>Tổng lợi nhuận:</strong> ${data.loi_nhuan ? data.loi_nhuan.toFixed(2) : 'N/A'}</p>
+                        <p><strong>Thời gian cập nhật:</strong> ${data.time ? new Date(data.time).toLocaleString() : 'N/A'}</p>
+                        <table class="profit-table">
+                            <thead>
+                                <tr>
+                                    <th>Tài khoản</th>
+                                    <th>Tiền cũ</th>
+                                    <th>Tiền mới</th>
+                                    <th>Lợi nhuận</th>
+                                    <th>Trạng thái</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+                    
+                    data.report.forEach(item => {
+                        const profitClass = item.profit > 0 ? 'profit-positive' : item.profit < 0 ? 'profit-negative' : 'profit-zero';
+                        html += `
+                            <tr>
+                                <td>${item.account}</td>
+                                <td>${item.old ? item.old.toFixed(2) : '0.00'}</td>
+                                <td>${item.new.toFixed(2)}</td>
+                                <td class="${profitClass}">${item.profit.toFixed(2)}</td>
+                                <td>${item.status}</td>
+                            </tr>
+                        `;
+                    });
+                    
+                    html += '</tbody></table>';
+                    modalContent.innerHTML = html;
+                })
+                .catch(error => {
+                    modalContent.innerHTML = '<div class="no-data">Lỗi khi tải dữ liệu</div>';
+                    console.error('Error fetching profit data:', error);
+                });
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('profitModal');
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
     </script>
 </body>
 </html>

@@ -134,21 +134,30 @@ def api_servers():
     return jsonify(servers)
 
 
-@app.route('/api/stats')
-def api_stats():
-    """API endpoint trả về thống kê tổng quan"""
-    servers = get_all_servers()
+@app.route('/api/profit/<ten_may>')
+def api_profit(ten_may):
+    """API endpoint trả về báo cáo lợi nhuận cho máy cụ thể từ money_monitor collection"""
+    collection = get_mongo_collection()
+    if collection is None:
+        return jsonify({'error': 'Không thể kết nối MongoDB'}), 500
     
-    stats = {
-        'total_servers': len(servers),
-        'online_servers': sum(1 for s in servers if s['online']),
-        'offline_servers': sum(1 for s in servers if not s['online']),
-        'total_accounts': sum(s['tong_so_acc'] for s in servers),
-        'total_online_accounts': sum(s['so_acc_online'] for s in servers if s['online']),
-        'last_update': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    }
-    
-    return jsonify(stats)
+    try:
+        # Query the money_monitor collection for the latest entry for this ten_may
+        money_collection = collection.database['money_monitor']
+        report = money_collection.find_one({"ten_may": ten_may}, sort=[("time", -1)])
+        
+        if report:
+            return jsonify({
+                'ten_may': report.get('ten_may'),
+                'loi_nhuan': report.get('loi_nhuan'),
+                'report': report.get('report', []),
+                'time': report.get('time').isoformat() if report.get('time') else None
+            })
+        else:
+            return jsonify({'error': f'Không tìm thấy báo cáo cho máy {ten_may}'}), 404
+    except Exception as e:
+        print(f"❌ Lỗi lấy báo cáo lợi nhuận: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/health')
