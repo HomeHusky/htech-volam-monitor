@@ -11,3 +11,6 @@ services:
       # Do NOT commit real credentials here!
       # - key: MONGO_URI
       #   value: your-mongodb-uri-here
+      # Timezone setting (optional, defaults to UTC)
+      # - key: TIMEZONE
+      #   value: Asia/Ho_Chi_Minh

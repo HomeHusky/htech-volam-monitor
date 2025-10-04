@@ -14,11 +14,26 @@ import os
 
 app = Flask(__name__)
 
-# MongoDB Configuration
+# MongoDB Configuration with timezone handling
 # ⚠️ IMPORTANT: Set MONGO_URI as environment variable on Render
 MONGO_URI = os.environ.get('MONGO_URI', 'mongodb+srv://username:password@cluster.mongodb.net/?retryWrites=true&w=majority')
 DB_NAME = os.environ.get('DB_NAME', 'HtechVolam')
 COLLECTION_NAME = os.environ.get('COLLECTION_NAME', 'server_status')
+
+# Timezone Configuration
+# Use UTC to avoid timezone confusion between local and server environments
+# Can be overridden with TIMEZONE environment variable (e.g., 'Asia/Ho_Chi_Minh')
+TIMEZONE_STR = os.environ.get('TIMEZONE', 'UTC')
+try:
+    import pytz
+    APP_TIMEZONE = pytz.timezone(TIMEZONE_STR)
+except ImportError:
+    # Fallback to UTC if pytz not available
+    APP_TIMEZONE = timezone.utc
+    print(f"Warning: pytz not available, using UTC. Install with: pip install pytz")
+except Exception as e:
+    print(f"Warning: Invalid timezone '{TIMEZONE_STR}', falling back to UTC: {e}")
+    APP_TIMEZONE = timezone.utc
 
 # Timeout threshold (minutes)
 OFFLINE_THRESHOLD_MINUTES = 70
@@ -49,7 +64,8 @@ def is_server_online(last_update):
     if not last_update:
         return False
     
-    now = datetime.now(timezone.utc)
+    # Use consistent timezone for comparison
+    now = datetime.now(APP_TIMEZONE)
     time_diff = now - last_update
     
     # Online nếu cập nhật trong vòng 70 phút
@@ -69,15 +85,15 @@ def get_all_servers():
         result = []
         for server in servers:
             last_update = server.get('cap_nhat_luc')
-            # Make last_update timezone-aware if it's naive
+            # Make last_update timezone-aware if it's naive, using consistent timezone
             if last_update and last_update.tzinfo is None:
-                last_update = last_update.replace(tzinfo=timezone.utc)
+                last_update = last_update.replace(tzinfo=APP_TIMEZONE)
             online = is_server_online(last_update)
             
-            # Tính thời gian từ lần cập nhật cuối
+            # Tính thời gian từ lần cập nhật cuối using consistent timezone
             time_ago = ""
             if last_update:
-                time_diff = datetime.now(timezone.utc) - last_update
+                time_diff = datetime.now(APP_TIMEZONE) - last_update
                 minutes = int(time_diff.total_seconds() / 60)
                 hours = int(minutes / 60)
                 
@@ -161,7 +177,7 @@ def api_profit(ten_may):
 @app.route('/health')
 def health():
     """Health check endpoint cho Render"""
-    return jsonify({'status': 'healthy', 'timestamp': datetime.now(timezone.utc).isoformat()})
+    return jsonify({'status': 'healthy', 'timestamp': datetime.now(APP_TIMEZONE).isoformat()})
 
 
 if __name__ == '__main__':
