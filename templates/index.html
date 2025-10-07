@@ -645,7 +645,7 @@
                     `;
                     
                     data.report.forEach(item => {
-                        const profitClass = item.profit > 0 ? 'profit-positive' : item.profit < 0 ? 'profit-negative' : 'profit-zero';
+                        let profitClass = 'profit-zero'; // default\n                        if (item.status === 'tăng') {\n                            profitClass = 'profit-positive';\n                        } else if (item.status === 'chưa đạt KPI') {\n                            profitClass = 'profit-negative';\n                        }
                         html += `
                             <tr>
                                 <td>${item.account}</td>
