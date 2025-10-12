@@ -15,29 +15,108 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            padding: 20px;
+            margin: 0;
+            padding: 0;
+            padding-top: 140px; /* Space for fixed navbar */
         }
 
         .container {
             max-width: 1400px;
             margin: 0 auto;
+            padding: 20px;
         }
 
-        header {
+        /* Navbar */
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+
+        .navbar-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .navbar-header {
             text-align: center;
             color: white;
-            margin-bottom: 30px;
+            padding: 15px 0 10px 0;
         }
 
-        header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
+        .navbar-header h1 {
+            font-size: 1.8em;
+            margin: 0;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
 
-        header p {
-            font-size: 1.1em;
+        .navbar-header p {
+            font-size: 0.9em;
+            margin: 5px 0 0 0;
             opacity: 0.9;
+        }
+
+        /* Tabs Navigation */
+        .tabs {
+            display: flex;
+            justify-content: center;
+            gap: 0;
+            background: rgba(0,0,0,0.1);
+            padding: 0;
+        }
+
+        .tab {
+            background: transparent;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-bottom: 3px solid transparent;
+            flex: 1;
+            max-width: 200px;
+        }
+
+        .tab:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .tab.active {
+            background: rgba(255,255,255,0.2);
+            border-bottom: 3px solid white;
+        }
+
+        /* Mobile menu toggle */
+        .mobile-menu-toggle {
+            display: none;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1.2em;
+            cursor: pointer;
+            width: 100%;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .mobile-menu-toggle:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
         }
 
         /* Stats Cards */
@@ -241,8 +320,42 @@
 
         /* Responsive */
         @media (max-width: 768px) {
-            header h1 {
-                font-size: 1.8em;
+            body {
+                padding-top: 180px; /* More space for mobile navbar */
+            }
+
+            .navbar-header h1 {
+                font-size: 1.5em;
+            }
+
+            .navbar-header p {
+                font-size: 0.8em;
+            }
+
+            .mobile-menu-toggle {
+                display: block;
+            }
+
+            .tabs {
+                display: none;
+                flex-direction: column;
+                gap: 0;
+            }
+
+            .tabs.show {
+                display: flex;
+            }
+
+            .tab {
+                max-width: 100%;
+                padding: 12px 20px;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+                border-left: 3px solid transparent;
+            }
+
+            .tab.active {
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+                border-left: 3px solid white;
             }
 
             .servers-grid {
@@ -251,6 +364,20 @@
 
             .stats-grid {
                 grid-template-columns: repeat(2, 1fr);
+            }
+
+            .refresh-button {
+                bottom: 20px;
+                right: 20px;
+                padding: 12px 20px;
+                font-size: 0.9em;
+            }
+
+            .refresh-indicator {
+                bottom: 80px;
+                right: 20px;
+                font-size: 0.8em;
+                padding: 8px 15px;
             }
         }
 
@@ -416,64 +543,30 @@
             color: #666;
         }
 
-        /* View All Button */
-        .view-all-button {
-            position: fixed;
-            bottom: 140px;
-            right: 20px;
-            background: #10b981;
-            color: white;
-            border: none;
-            padding: 15px 25px;
-            border-radius: 30px;
-            font-size: 1em;
-            font-weight: bold;
-            cursor: pointer;
+        /* Profit table container */
+        .profit-table-container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 8px;
         }
 
-        .view-all-button:hover {
-            background: #059669;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
-        }
-
-        .view-all-button:active {
-            transform: translateY(0);
-        }
-
-        /* Settings Button */
-        .settings-button {
-            position: fixed;
-            bottom: 200px;
-            right: 20px;
-            background: #f59e0b;
-            color: white;
-            border: none;
-            padding: 15px 25px;
-            border-radius: 30px;
-            font-size: 1em;
-            font-weight: bold;
-            cursor: pointer;
+        /* Settings content */
+        .settings-content {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 8px;
         }
 
-        .settings-button:hover {
-            background: #d97706;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        .settings-content h3 {
+            color: #333;
+            margin-bottom: 10px;
         }
 
-        .settings-button:active {
-            transform: translateY(0);
+        .settings-content p {
+            color: #666;
+            margin-bottom: 20px;
         }
 
         /* Excluded servers list */
@@ -625,11 +718,30 @@
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>🖥️ Server Monitor</h1>
-            <p>Htech Volam - Giám sát máy chủ thời gian thực</p>
-        </header>
+        <!-- Fixed Navbar -->
+        <nav class="navbar">
+            <div class="navbar-container">
+                <div class="navbar-header">
+                    <h1>🖥️ Server Monitor</h1>
+                    <p>Htech Volam - Giám sát máy chủ thời gian thực</p>
+                </div>
+                
+                <!-- Mobile menu toggle -->
+                <button class="mobile-menu-toggle" onclick="toggleMobileMenu()">
+                    <span id="menu-icon">☰</span> Menu
+                </button>
+                
+                <!-- Tabs Navigation -->
+                <div class="tabs" id="tabs-menu">
+                    <button class="tab active" onclick="switchTab('overview')">Tổng quan</button>
+                    <button class="tab" onclick="switchTab('profit-table')">Bảng tổng hợp</button>
+                    <button class="tab" onclick="switchTab('settings')">Cài đặt</button>
+                </div>
+            </div>
+        </nav>
 
+        <!-- Tab: Overview -->
+        <div id="tab-overview" class="tab-content active">
         <!-- Statistics -->
         <div class="stats-grid">
             <div class="stat-card">
@@ -726,18 +838,38 @@
             <p>Không tìm thấy máy chủ nào trong hệ thống.</p>
         </div>
         {% endif %}
+        </div>
+        <!-- End Tab: Overview -->
 
-        <!-- Settings button -->
-        <button class="settings-button" onclick="showSettings()">
-            <span class="icon">⚙️</span>
-            <span class="text">Cài đặt</span>
-        </button>
+        <!-- Tab: Profit Table -->
+        <div id="tab-profit-table" class="tab-content">
+            <div class="profit-table-container">
+                <div id="profit-table-content">
+                    <div class="no-data">Đang tải dữ liệu...</div>
+                </div>
+            </div>
+        </div>
+        <!-- End Tab: Profit Table -->
 
-        <!-- View All button -->
-        <button class="view-all-button" onclick="showAllServers()">
-            <span class="icon">📊</span>
-            <span class="text">Xem bảng tổng hợp</span>
-        </button>
+        <!-- Tab: Settings -->
+        <div id="tab-settings" class="tab-content">
+            <div class="settings-content">
+                <h3>Máy loại trừ khỏi thông báo offline</h3>
+                <p>Các máy trong danh sách này sẽ không gửi thông báo Discord khi offline</p>
+                
+                <div id="excluded-servers-list" class="excluded-list">
+                    <div class="no-data">Đang tải...</div>
+                </div>
+                
+                <div class="add-excluded-form">
+                    <select id="server-select">
+                        <option value="">Chọn máy để thêm...</option>
+                    </select>
+                    <button onclick="addExcludedServer()">Thêm</button>
+                </div>
+            </div>
+        </div>
+        <!-- End Tab: Settings -->
 
         <!-- Refresh button -->
         <button class="refresh-button" onclick="manualRefresh()">
@@ -767,45 +899,6 @@
         </div>
     </div>
 
-    <!-- All Servers Modal -->
-    <div id="allServersModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>📊 Bảng tổng hợp tất cả máy chủ</h2>
-                <span class="close" onclick="closeAllServersModal()">&times;</span>
-            </div>
-            <div class="modal-body">
-                <div id="all-servers-content">
-                    <div class="no-data">Đang tải dữ liệu...</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Settings Modal -->
-    <div id="settingsModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>⚙️ Cài đặt thông báo Discord</h2>
-                <span class="close" onclick="closeSettingsModal()">&times;</span>
-            </div>
-            <div class="modal-body">
-                <h3>Máy loại trừ khỏi thông báo offline</h3>
-                <p style="color: #666; margin-bottom: 15px;">Các máy trong danh sách này sẽ không gửi thông báo Discord khi offline</p>
-                
-                <div id="excluded-servers-list" class="excluded-list">
-                    <div class="no-data">Đang tải...</div>
-                </div>
-                
-                <div class="add-excluded-form">
-                    <select id="server-select">
-                        <option value="">Chọn máy để thêm...</option>
-                    </select>
-                    <button onclick="addExcludedServer()">Thêm</button>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <script>
         // Auto refresh every 30 minutes (1800000ms)
@@ -865,24 +958,58 @@
             document.getElementById('profitModal').style.display = 'none';
         }
 
-        function closeAllServersModal() {
-            document.getElementById('allServersModal').style.display = 'none';
+        // Tab switching
+        function switchTab(tabName) {
+            // Hide all tab contents
+            const tabContents = document.querySelectorAll('.tab-content');
+            tabContents.forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // Remove active class from all tabs
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Show selected tab content
+            document.getElementById('tab-' + tabName).classList.add('active');
+
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+
+            // Close mobile menu after selection
+            if (window.innerWidth <= 768) {
+                const tabsMenu = document.getElementById('tabs-menu');
+                tabsMenu.classList.remove('show');
+                document.getElementById('menu-icon').textContent = '☰';
+            }
+
+            // Load data for specific tabs
+            if (tabName === 'profit-table') {
+                loadProfitTable();
+            } else if (tabName === 'settings') {
+                loadExcludedServers();
+                loadServerNames();
+            }
         }
 
-        function closeSettingsModal() {
-            document.getElementById('settingsModal').style.display = 'none';
+        function toggleMobileMenu() {
+            const tabsMenu = document.getElementById('tabs-menu');
+            const menuIcon = document.getElementById('menu-icon');
+            
+            if (tabsMenu.classList.contains('show')) {
+                tabsMenu.classList.remove('show');
+                menuIcon.textContent = '☰';
+            } else {
+                tabsMenu.classList.add('show');
+                menuIcon.textContent = '×';
+            }
         }
 
         // Settings and excluded servers management
         let allServerNames = [];
         let excludedServers = [];
-
-        function showSettings() {
-            const modal = document.getElementById('settingsModal');
-            modal.style.display = 'block';
-            loadExcludedServers();
-            loadServerNames();
-        }
 
         function loadServerNames() {
             fetch('/api/servers')
@@ -1012,12 +1139,10 @@
             });
         }
 
-        function showAllServers() {
-            const modal = document.getElementById('allServersModal');
-            const modalContent = document.getElementById('all-servers-content');
+        function loadProfitTable() {
+            const modalContent = document.getElementById('profit-table-content');
             
             modalContent.innerHTML = '<div class="no-data">Đang tải dữ liệu...</div>';
-            modal.style.display = 'block';
             
             // Fetch all profits data
             fetch('/api/all-profits')
@@ -1150,9 +1275,7 @@
         }
         
         function showProfitDetail(ten_may) {
-            // Close the all servers modal first
-            closeAllServersModal();
-            // Then show the profit detail modal
+            // Show the profit detail modal
             showProfit(ten_may);
         }
 
@@ -1227,17 +1350,9 @@
         // Close modal when clicking outside
         window.onclick = function(event) {
             const profitModal = document.getElementById('profitModal');
-            const allServersModal = document.getElementById('allServersModal');
-            const settingsModal = document.getElementById('settingsModal');
             
             if (event.target == profitModal) {
                 profitModal.style.display = 'none';
-            }
-            if (event.target == allServersModal) {
-                allServersModal.style.display = 'none';
-            }
-            if (event.target == settingsModal) {
-                settingsModal.style.display = 'none';
             }
         }
     </script>
