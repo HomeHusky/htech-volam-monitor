@@ -13,6 +13,8 @@ from datetime import datetime, timedelta, timezone
 import os
 import requests
 import json
+import threading
+import time
 
 app = Flask(__name__)
 
@@ -27,6 +29,16 @@ DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK_URL', '')
 
 # Collection for excluded servers
 EXCLUDED_SERVERS_COLLECTION = 'excluded_servers'
+
+# Collection for monitoring settings
+MONITORING_SETTINGS_COLLECTION = 'monitoring_settings'
+
+# Default check interval (minutes)
+DEFAULT_CHECK_INTERVAL_MINUTES = 30
+
+# Background monitoring thread
+monitoring_thread = None
+monitoring_stop_event = threading.Event()
 
 # Timezone Configuration
 # Use UTC to avoid timezone confusion between local and server environments
@@ -343,12 +355,182 @@ def send_discord_notification(offline_servers):
         print(f"❌ Lỗi gửi Discord notification: {e}")
 
 
+@app.route('/api/monitoring-settings', methods=['GET'])
+def get_monitoring_settings():
+    """Lấy cài đặt monitoring"""
+    collection = get_mongo_collection()
+    if collection is None:
+        return jsonify({'error': 'Không thể kết nối MongoDB'}), 500
+    
+    try:
+        settings_collection = collection.database[MONITORING_SETTINGS_COLLECTION]
+        settings = settings_collection.find_one({'_id': 'monitoring_config'})
+        
+        if settings and 'check_interval_minutes' in settings:
+            return jsonify({'check_interval_minutes': settings['check_interval_minutes']})
+        else:
+            return jsonify({'check_interval_minutes': DEFAULT_CHECK_INTERVAL_MINUTES})
+    except Exception as e:
+        print(f"❌ Lỗi lấy cài đặt monitoring: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/monitoring-settings', methods=['POST'])
+def update_monitoring_settings():
+    """Cập nhật cài đặt monitoring"""
+    collection = get_mongo_collection()
+    if collection is None:
+        return jsonify({'error': 'Không thể kết nối MongoDB'}), 500
+    
+    try:
+        data = request.get_json()
+        check_interval = data.get('check_interval_minutes', DEFAULT_CHECK_INTERVAL_MINUTES)
+        
+        # Validate
+        if not isinstance(check_interval, (int, float)) or check_interval < 1 or check_interval > 1440:
+            return jsonify({'error': 'Thời gian phải từ 1 đến 1440 phút'}), 400
+        
+        settings_collection = collection.database[MONITORING_SETTINGS_COLLECTION]
+        settings_collection.update_one(
+            {'_id': 'monitoring_config'},
+            {'$set': {'check_interval_minutes': check_interval, 'updated_at': datetime.now(APP_TIMEZONE)}},
+            upsert=True
+        )
+        
+        # Restart monitoring thread with new interval
+        restart_monitoring_thread()
+        
+        return jsonify({'success': True, 'check_interval_minutes': check_interval})
+    except Exception as e:
+        print(f"❌ Lỗi cập nhật cài đặt monitoring: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+def get_check_interval():
+    """Lấy thời gian check interval từ database"""
+    try:
+        collection = get_mongo_collection()
+        if collection is None:
+            return DEFAULT_CHECK_INTERVAL_MINUTES
+        
+        settings_collection = collection.database[MONITORING_SETTINGS_COLLECTION]
+        settings = settings_collection.find_one({'_id': 'monitoring_config'})
+        
+        if settings and 'check_interval_minutes' in settings:
+            return settings['check_interval_minutes']
+    except Exception as e:
+        print(f"❌ Lỗi lấy check interval: {e}")
+    
+    return DEFAULT_CHECK_INTERVAL_MINUTES
+
+
+def monitoring_loop():
+    """Background thread để kiểm tra máy offline định kỳ"""
+    print("🔄 Monitoring thread started")
+    
+    while not monitoring_stop_event.is_set():
+        try:
+            # Get current check interval
+            check_interval_minutes = get_check_interval()
+            check_interval_seconds = check_interval_minutes * 60
+            
+            print(f"⏱️ Next check in {check_interval_minutes} minutes")
+            
+            # Wait for the interval or until stop event is set
+            if monitoring_stop_event.wait(timeout=check_interval_seconds):
+                break  # Stop event was set
+            
+            # Perform the check
+            print(f"🔍 Checking offline servers...")
+            check_and_notify_offline_servers()
+            
+        except Exception as e:
+            print(f"❌ Error in monitoring loop: {e}")
+            # Wait a bit before retrying
+            monitoring_stop_event.wait(timeout=60)
+    
+    print("🛑 Monitoring thread stopped")
+
+
+def check_and_notify_offline_servers():
+    """Kiểm tra máy offline và gửi thông báo Discord"""
+    if not DISCORD_WEBHOOK_URL:
+        print("⚠️ Discord webhook not configured, skipping notification")
+        return
+    
+    collection = get_mongo_collection()
+    if collection is None:
+        print("❌ Cannot connect to MongoDB")
+        return
+    
+    try:
+        # Get excluded servers
+        excluded_collection = collection.database[EXCLUDED_SERVERS_COLLECTION]
+        excluded_doc = excluded_collection.find_one({'_id': 'excluded_list'})
+        excluded_servers = excluded_doc.get('servers', []) if excluded_doc else []
+        
+        # Get all servers
+        servers = get_all_servers()
+        
+        # Find offline servers (excluding the excluded ones)
+        offline_servers = []
+        for server in servers:
+            if not server['online'] and server['ten_may'] not in excluded_servers:
+                offline_servers.append(server)
+        
+        # Send Discord notification if there are offline servers
+        if offline_servers:
+            send_discord_notification(offline_servers)
+            print(f"✅ Sent Discord notification for {len(offline_servers)} offline servers")
+        else:
+            print("✅ All servers are online")
+            
+    except Exception as e:
+        print(f"❌ Error checking offline servers: {e}")
+
+
+def start_monitoring_thread():
+    """Khởi động background monitoring thread"""
+    global monitoring_thread
+    
+    if monitoring_thread is not None and monitoring_thread.is_alive():
+        print("⚠️ Monitoring thread already running")
+        return
+    
+    monitoring_stop_event.clear()
+    monitoring_thread = threading.Thread(target=monitoring_loop, daemon=True)
+    monitoring_thread.start()
+    print("✅ Monitoring thread started")
+
+
+def restart_monitoring_thread():
+    """Restart monitoring thread với cài đặt mới"""
+    global monitoring_thread
+    
+    print("🔄 Restarting monitoring thread...")
+    
+    # Stop current thread
+    if monitoring_thread is not None and monitoring_thread.is_alive():
+        monitoring_stop_event.set()
+        monitoring_thread.join(timeout=5)
+    
+    # Start new thread
+    start_monitoring_thread()
+
+
 @app.route('/health')
 def health():
     """Health check endpoint cho Render"""
-    return jsonify({'status': 'healthy', 'timestamp': datetime.now(APP_TIMEZONE).isoformat()})
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.now(APP_TIMEZONE).isoformat(),
+        'monitoring_active': monitoring_thread is not None and monitoring_thread.is_alive()
+    })
 
 
 if __name__ == '__main__':
+    # Start background monitoring thread
+    start_monitoring_thread()
+    
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)

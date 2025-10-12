@@ -919,17 +919,21 @@
 
                 <!-- Refresh Time Settings -->
                 <div class="refresh-time-setting">
-                    <h3>Thời gian tự động làm mới</h3>
-                    <p>Cài đặt thời gian tự động làm mới trang và kiểm tra máy offline</p>
+                    <h3>⏱️ Thời gian kiểm tra tự động</h3>
+                    <p>Server sẽ tự động kiểm tra máy offline và gửi thông báo Discord theo chu kỳ này. Trang web cũng sẽ tự động làm mới theo cùng thời gian.</p>
                     
                     <div class="refresh-time-controls">
                         <label><strong>Thời gian (phút):</strong></label>
                         <input type="number" id="refresh-minutes" min="1" max="1440" value="30" />
-                        <button onclick="updateRefreshTime()">Cập nhật</button>
+                        <button onclick="updateRefreshTime()">💾 Lưu cài đặt</button>
                     </div>
                     
                     <div class="refresh-time-info" id="refresh-time-info">
-                        ⏱️ Hiện tại: Tự động làm mới mỗi <strong>30 phút</strong>
+                        ⏱️ Hiện tại: Server kiểm tra mỗi <strong>30 phút</strong>
+                    </div>
+                    
+                    <div style="margin-top: 15px; padding: 10px; background: #fef3c7; border-radius: 8px; font-size: 0.9em; color: #92400e;">
+                        ℹ️ <strong>Lưu ý:</strong> Cài đặt này được lưu trên server và áp dụng cho tất cả người dùng. Server sẽ tự động kiểm tra ngay cả khi bạn tắt máy.
                     </div>
                 </div>
             </div>
@@ -972,15 +976,21 @@
         let countdownInterval;
         let remainingTime = AUTO_REFRESH_TIME;
 
-        // Load saved refresh time from localStorage
+        // Load saved refresh time from server
         function loadRefreshTime() {
-            const saved = localStorage.getItem('autoRefreshMinutes');
-            if (saved) {
-                const minutes = parseInt(saved);
-                AUTO_REFRESH_TIME = minutes * 60 * 1000;
-                document.getElementById('refresh-minutes').value = minutes;
-                updateRefreshTimeInfo(minutes);
-            }
+            fetch('/api/monitoring-settings')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.check_interval_minutes) {
+                        const minutes = data.check_interval_minutes;
+                        AUTO_REFRESH_TIME = minutes * 60 * 1000;
+                        document.getElementById('refresh-minutes').value = minutes;
+                        updateRefreshTimeInfo(minutes);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading monitoring settings:', error);
+                });
         }
 
         // Update refresh time
@@ -992,26 +1002,42 @@
                 return;
             }
             
-            // Save to localStorage
-            localStorage.setItem('autoRefreshMinutes', minutes);
-            
-            // Update global variable
-            AUTO_REFRESH_TIME = minutes * 60 * 1000;
-            
-            // Restart auto refresh with new time
-            startAutoRefresh();
-            
-            // Update info display
-            updateRefreshTimeInfo(minutes);
-            
-            alert(`Đã cập nhật thời gian tự động làm mới: ${minutes} phút`);
+            // Save to server
+            fetch('/api/monitoring-settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ check_interval_minutes: minutes })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update global variable
+                    AUTO_REFRESH_TIME = minutes * 60 * 1000;
+                    
+                    // Restart auto refresh with new time
+                    startAutoRefresh();
+                    
+                    // Update info display
+                    updateRefreshTimeInfo(minutes);
+                    
+                    alert(`✅ Đã lưu cài đặt!\n\nServer sẽ kiểm tra máy offline mỗi ${minutes} phút và gửi thông báo Discord nếu phát hiện máy offline.`);
+                } else {
+                    alert('❌ Lỗi: ' + (data.error || 'Không thể lưu cài đặt'));
+                }
+            })
+            .catch(error => {
+                console.error('Error updating monitoring settings:', error);
+                alert('❌ Lỗi kết nối server');
+            });
         }
 
         // Update refresh time info display
         function updateRefreshTimeInfo(minutes) {
             const infoEl = document.getElementById('refresh-time-info');
             if (infoEl) {
-                infoEl.innerHTML = `⏱️ Hiện tại: Tự động làm mới mỗi <strong>${minutes} phút</strong>`;
+                infoEl.innerHTML = `⏱️ Hiện tại: Server kiểm tra mỗi <strong>${minutes} phút</strong>`;
             }
         }
 
@@ -1024,10 +1050,8 @@
             
             // Set auto refresh
             refreshTimeout = setTimeout(function() {
-                // Check offline servers before reload
-                checkOfflineServers();
-                // Reload after 1 second
-                setTimeout(() => location.reload(), 1000);
+                // Just reload, server will handle checking offline servers
+                location.reload();
             }, AUTO_REFRESH_TIME);
 
             // Update countdown every second
@@ -1354,14 +1378,18 @@
                                 // Normalize status for comparison (lowercase and trim)
                                 const normalizedStatus = (acc.status || '').toLowerCase().trim();
                                 
-                                // Green for positive statuses
-                                if (normalizedStatus.includes('tăng') || normalizedStatus.includes('đạt kpi') || normalizedStatus === 'đạt kpi') {
-                                    statusClass = 'status-tang';
-                                } 
-                                // Red for negative statuses
-                                else if (normalizedStatus.includes('chưa đạt kpi') || normalizedStatus.includes('chưa đạt')) {
+                                // IMPORTANT: Check negative statuses FIRST (before checking positive ones)
+                                // Because "chưa đạt kpi" contains "đạt kpi"
+                                // Red for negative statuses: "Chưa đạt KPI" and "Giảm"
+                                if (normalizedStatus.includes('chưa đạt kpi') || normalizedStatus.includes('chưa đạt') || normalizedStatus.includes('giảm')) {
                                     statusClass = 'status-chua-dat-kpi';
+                                } 
+                                // Green for positive statuses: "Tăng" and "Đạt KPI"
+                                else if (normalizedStatus.includes('tăng') || normalizedStatus.includes('đạt kpi')) {
+                                    statusClass = 'status-tang';
                                 }
+                                // Gray for neutral: "Không đổi" and others
+                                // statusClass = 'status-other' is already set as default
                                 
                                 html += `
                                     <td>
@@ -1480,9 +1508,6 @@
             
             // Start auto refresh countdown
             startAutoRefresh();
-            
-            // Wait 2 seconds after page load to check offline servers
-            setTimeout(checkOfflineServers, 2000);
         });
 
         // Close modal when clicking outside
