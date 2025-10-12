@@ -415,6 +415,77 @@
             padding: 40px;
             color: #666;
         }
+
+        /* View All Button */
+        .view-all-button {
+            position: fixed;
+            bottom: 140px;
+            right: 20px;
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            border-radius: 30px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .view-all-button:hover {
+            background: #059669;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+
+        .view-all-button:active {
+            transform: translateY(0);
+        }
+
+        /* All Servers Table */
+        .all-servers-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .all-servers-table th,
+        .all-servers-table td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .all-servers-table th {
+            background-color: #667eea;
+            color: white;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .all-servers-table tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+
+        .all-servers-table tr:hover {
+            background-color: #e9ecef;
+        }
+
+        .all-servers-table .status-online {
+            color: #10b981;
+            font-weight: bold;
+        }
+
+        .all-servers-table .status-offline {
+            color: #ef4444;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -521,6 +592,12 @@
         </div>
         {% endif %}
 
+        <!-- View All button -->
+        <button class="view-all-button" onclick="showAllServers()">
+            <span class="icon">📊</span>
+            <span class="text">Xem bảng tổng hợp</span>
+        </button>
+
         <!-- Refresh button -->
         <button class="refresh-button" onclick="manualRefresh()">
             <span class="icon">🔄</span>
@@ -543,6 +620,21 @@
             </div>
             <div class="modal-body">
                 <div id="modal-content">
+                    <div class="no-data">Đang tải dữ liệu...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- All Servers Modal -->
+    <div id="allServersModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📊 Bảng tổng hợp tất cả máy chủ</h2>
+                <span class="close" onclick="closeAllServersModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="all-servers-content">
                     <div class="no-data">Đang tải dữ liệu...</div>
                 </div>
             </div>
@@ -602,6 +694,144 @@
 
         function closeModal() {
             document.getElementById('profitModal').style.display = 'none';
+        }
+
+        function closeAllServersModal() {
+            document.getElementById('allServersModal').style.display = 'none';
+        }
+
+        function showAllServers() {
+            const modal = document.getElementById('allServersModal');
+            const modalContent = document.getElementById('all-servers-content');
+            
+            modalContent.innerHTML = '<div class="no-data">Đang tải dữ liệu...</div>';
+            modal.style.display = 'block';
+            
+            // Fetch all profits data
+            fetch('/api/all-profits')
+                .then(response => response.json())
+                .then(data => {
+                    if (!data || data.length === 0) {
+                        modalContent.innerHTML = '<div class="no-data">Không có dữ liệu doanh thu</div>';
+                        return;
+                    }
+                    
+                    // Sort by machine number (extract number from ten_may)
+                    data.sort((a, b) => {
+                        const numA = parseInt(a.ten_may.match(/\d+/)?.[0] || '0');
+                        const numB = parseInt(b.ten_may.match(/\d+/)?.[0] || '0');
+                        return numA - numB;
+                    });
+                    
+                    // Build account-machine matrix
+                    const accountMap = new Map(); // account -> {machine: profit}
+                    const machines = [];
+                    
+                    data.forEach(machineData => {
+                        machines.push(machineData.ten_may);
+                        
+                        if (machineData.report && machineData.report.length > 0) {
+                            machineData.report.forEach(acc => {
+                                if (!accountMap.has(acc.account)) {
+                                    accountMap.set(acc.account, {});
+                                }
+                                accountMap.get(acc.account)[machineData.ten_may] = {
+                                    profit: acc.profit || 0,
+                                    status: acc.status || ''
+                                };
+                            });
+                        }
+                    });
+                    
+                    // Calculate totals
+                    const machineTotals = {};
+                    machines.forEach(machine => {
+                        machineTotals[machine] = 0;
+                    });
+                    
+                    accountMap.forEach((machineData, account) => {
+                        machines.forEach(machine => {
+                            if (machineData[machine]) {
+                                machineTotals[machine] += machineData[machine].profit;
+                            }
+                        });
+                    });
+                    
+                    const grandTotal = Object.values(machineTotals).reduce((sum, val) => sum + val, 0);
+                    
+                    // Create table
+                    let html = `
+                        <div style="margin-bottom: 20px; padding: 15px; background: #f0f9ff; border-radius: 8px; text-align: center;">
+                            <h3 style="margin: 0; color: #333;">Tổng lợi nhuận: <span style="color: ${grandTotal >= 0 ? '#10b981' : '#ef4444'}; font-size: 1.3em;">${grandTotal.toFixed(2)}</span></h3>
+                        </div>
+                        <div style="overflow-x: auto;">
+                        <table class="all-servers-table" style="min-width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th style="position: sticky; left: 0; background: #667eea; z-index: 11;">Tài khoản</th>
+                    `;
+                    
+                    // Add machine columns
+                    machines.forEach(machine => {
+                        html += `<th>${machine}</th>`;
+                    });
+                    
+                    html += `
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+                    
+                    // Add account rows
+                    const sortedAccounts = Array.from(accountMap.keys()).sort();
+                    sortedAccounts.forEach(account => {
+                        html += `<tr><td style="position: sticky; left: 0; background: white; font-weight: bold; z-index: 10;"><strong>${account}</strong></td>`;
+                        
+                        machines.forEach(machine => {
+                            const accData = accountMap.get(account)[machine];
+                            if (accData) {
+                                const profitClass = accData.profit >= 0 ? 'profit-positive' : 'profit-negative';
+                                html += `<td class="${profitClass}" title="${accData.status}">${accData.profit.toFixed(2)}</td>`;
+                            } else {
+                                html += `<td style="color: #ccc;">-</td>`;
+                            }
+                        });
+                        
+                        html += `</tr>`;
+                    });
+                    
+                    // Add total row
+                    html += `
+                        <tr style="background: #e0e7ff; font-weight: bold;">
+                            <td style="position: sticky; left: 0; background: #e0e7ff; z-index: 10;"><strong>TỔNG</strong></td>
+                    `;
+                    
+                    machines.forEach(machine => {
+                        const total = machineTotals[machine];
+                        const profitClass = total >= 0 ? 'profit-positive' : 'profit-negative';
+                        html += `<td class="${profitClass}" style="font-size: 1.1em;">${total.toFixed(2)}</td>`;
+                    });
+                    
+                    html += `
+                        </tr>
+                            </tbody>
+                        </table>
+                        </div>
+                    `;
+                    
+                    modalContent.innerHTML = html;
+                })
+                .catch(error => {
+                    modalContent.innerHTML = '<div class="no-data">Lỗi khi tải dữ liệu</div>';
+                    console.error('Error fetching profits data:', error);
+                });
+        }
+        
+        function showProfitDetail(ten_may) {
+            // Close the all servers modal first
+            closeAllServersModal();
+            // Then show the profit detail modal
+            showProfit(ten_may);
         }
 
         function showProfit(ten_may) {
@@ -668,9 +898,14 @@
 
         // Close modal when clicking outside
         window.onclick = function(event) {
-            const modal = document.getElementById('profitModal');
-            if (event.target == modal) {
-                modal.style.display = 'none';
+            const profitModal = document.getElementById('profitModal');
+            const allServersModal = document.getElementById('allServersModal');
+            
+            if (event.target == profitModal) {
+                profitModal.style.display = 'none';
+            }
+            if (event.target == allServersModal) {
+                allServersModal.style.display = 'none';
             }
         }
     </script>

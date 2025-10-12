@@ -174,6 +174,39 @@ def api_profit(ten_may):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/all-profits')
+def api_all_profits():
+    """API endpoint trả về báo cáo lợi nhuận cho tất cả máy từ money_monitor collection"""
+    collection = get_mongo_collection()
+    if collection is None:
+        return jsonify({'error': 'Không thể kết nối MongoDB'}), 500
+    
+    try:
+        # Query the money_monitor collection for all machines
+        money_collection = collection.database['money_monitor']
+        
+        # Get all unique machine names
+        all_machines = money_collection.distinct('ten_may')
+        
+        results = []
+        for ten_may in all_machines:
+            # Get the latest report for each machine
+            report = money_collection.find_one({"ten_may": ten_may}, sort=[("time", -1)])
+            
+            if report:
+                results.append({
+                    'ten_may': report.get('ten_may'),
+                    'loi_nhuan': report.get('loi_nhuan', 0),
+                    'report': report.get('report', []),
+                    'time': report.get('time').isoformat() if report.get('time') else None
+                })
+        
+        return jsonify(results)
+    except Exception as e:
+        print(f" Lỗi lấy báo cáo lợi nhuận tất cả máy: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/health')
 def health():
     """Health check endpoint cho Render"""
