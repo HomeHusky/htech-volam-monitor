@@ -1225,15 +1225,21 @@
                                 const acc = accounts[i];
                                 let statusClass = 'status-other';
                                 
-                                if (acc.status === 'tăng') {
+                                // Normalize status for comparison (lowercase and trim)
+                                const normalizedStatus = (acc.status || '').toLowerCase().trim();
+                                
+                                // Green for positive statuses
+                                if (normalizedStatus.includes('tăng') || normalizedStatus.includes('đạt kpi') || normalizedStatus === 'đạt kpi') {
                                     statusClass = 'status-tang';
-                                } else if (acc.status === 'chưa đạt KPI') {
+                                } 
+                                // Red for negative statuses
+                                else if (normalizedStatus.includes('chưa đạt kpi') || normalizedStatus.includes('chưa đạt')) {
                                     statusClass = 'status-chua-dat-kpi';
                                 }
                                 
                                 html += `
                                     <td>
-                                        <div class="account-cell ${statusClass}">
+                                        <div class="account-cell ${statusClass}" title="Trạng thái: ${acc.status}">
                                             <span class="account-name">${acc.account}</span>
                                             <span class="account-profit">${acc.profit.toFixed(2)}</span>
                                         </div>
