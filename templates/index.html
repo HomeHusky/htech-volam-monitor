@@ -486,6 +486,46 @@
             color: #ef4444;
             font-weight: bold;
         }
+
+        /* Account cell styling */
+        .account-cell {
+            padding: 8px;
+            border-radius: 6px;
+            margin: 2px;
+            display: inline-block;
+            min-width: 120px;
+        }
+
+        .account-cell.status-tang {
+            background-color: #d1fae5;
+            color: #065f46;
+            border: 1px solid #10b981;
+        }
+
+        .account-cell.status-chua-dat-kpi {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #ef4444;
+        }
+
+        .account-cell.status-other {
+            background-color: #f3f4f6;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+
+        .account-name {
+            font-weight: bold;
+            font-size: 0.9em;
+            display: block;
+        }
+
+        .account-profit {
+            font-size: 1.1em;
+            font-weight: bold;
+            display: block;
+            margin-top: 4px;
+        }
     </style>
 </head>
 <body>
@@ -723,38 +763,34 @@
                         return numA - numB;
                     });
                     
-                    // Build account-machine matrix
-                    const accountMap = new Map(); // account -> {machine: profit}
+                    // Build machine data structure
                     const machines = [];
+                    const machineAccounts = {}; // machine -> [accounts]
+                    const machineTotals = {};
                     
                     data.forEach(machineData => {
                         machines.push(machineData.ten_may);
+                        machineAccounts[machineData.ten_may] = [];
+                        machineTotals[machineData.ten_may] = 0;
                         
                         if (machineData.report && machineData.report.length > 0) {
                             machineData.report.forEach(acc => {
-                                if (!accountMap.has(acc.account)) {
-                                    accountMap.set(acc.account, {});
-                                }
-                                accountMap.get(acc.account)[machineData.ten_may] = {
+                                machineAccounts[machineData.ten_may].push({
+                                    account: acc.account,
                                     profit: acc.profit || 0,
                                     status: acc.status || ''
-                                };
+                                });
+                                machineTotals[machineData.ten_may] += (acc.profit || 0);
                             });
                         }
                     });
                     
-                    // Calculate totals
-                    const machineTotals = {};
+                    // Find max accounts in any machine
+                    let maxAccounts = 0;
                     machines.forEach(machine => {
-                        machineTotals[machine] = 0;
-                    });
-                    
-                    accountMap.forEach((machineData, account) => {
-                        machines.forEach(machine => {
-                            if (machineData[machine]) {
-                                machineTotals[machine] += machineData[machine].profit;
-                            }
-                        });
+                        if (machineAccounts[machine].length > maxAccounts) {
+                            maxAccounts = machineAccounts[machine].length;
+                        }
                     });
                     
                     const grandTotal = Object.values(machineTotals).reduce((sum, val) => sum + val, 0);
@@ -768,7 +804,7 @@
                         <table class="all-servers-table" style="min-width: 100%;">
                             <thead>
                                 <tr>
-                                    <th style="position: sticky; left: 0; background: #667eea; z-index: 11;">Tài khoản</th>
+                                    <th style="width: 60px;">STT</th>
                     `;
                     
                     // Add machine columns
@@ -782,34 +818,48 @@
                             <tbody>
                     `;
                     
-                    // Add account rows
-                    const sortedAccounts = Array.from(accountMap.keys()).sort();
-                    sortedAccounts.forEach(account => {
-                        html += `<tr><td style="position: sticky; left: 0; background: white; font-weight: bold; z-index: 10;"><strong>${account}</strong></td>`;
+                    // Add rows based on max accounts
+                    for (let i = 0; i < maxAccounts; i++) {
+                        html += `<tr><td><strong>${i + 1}</strong></td>`;
                         
                         machines.forEach(machine => {
-                            const accData = accountMap.get(account)[machine];
-                            if (accData) {
-                                const profitClass = accData.profit >= 0 ? 'profit-positive' : 'profit-negative';
-                                html += `<td class="${profitClass}" title="${accData.status}">${accData.profit.toFixed(2)}</td>`;
+                            const accounts = machineAccounts[machine];
+                            if (i < accounts.length) {
+                                const acc = accounts[i];
+                                let statusClass = 'status-other';
+                                
+                                if (acc.status === 'tăng') {
+                                    statusClass = 'status-tang';
+                                } else if (acc.status === 'chưa đạt KPI') {
+                                    statusClass = 'status-chua-dat-kpi';
+                                }
+                                
+                                html += `
+                                    <td>
+                                        <div class="account-cell ${statusClass}">
+                                            <span class="account-name">${acc.account}</span>
+                                            <span class="account-profit">${acc.profit.toFixed(2)}</span>
+                                        </div>
+                                    </td>
+                                `;
                             } else {
                                 html += `<td style="color: #ccc;">-</td>`;
                             }
                         });
                         
                         html += `</tr>`;
-                    });
+                    }
                     
                     // Add total row
                     html += `
                         <tr style="background: #e0e7ff; font-weight: bold;">
-                            <td style="position: sticky; left: 0; background: #e0e7ff; z-index: 10;"><strong>TỔNG</strong></td>
+                            <td><strong>TỔNG</strong></td>
                     `;
                     
                     machines.forEach(machine => {
                         const total = machineTotals[machine];
                         const profitClass = total >= 0 ? 'profit-positive' : 'profit-negative';
-                        html += `<td class="${profitClass}" style="font-size: 1.1em;">${total.toFixed(2)}</td>`;
+                        html += `<td class="${profitClass}" style="font-size: 1.2em;">${total.toFixed(2)}</td>`;
                     });
                     
                     html += `
