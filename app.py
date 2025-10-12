@@ -6,11 +6,13 @@ Web application để hiển thị trạng thái máy chủ từ MongoDB
 Deploy lên Render.com
 """
 
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from datetime import datetime, timedelta, timezone
 import os
+import requests
+import json
 
 app = Flask(__name__)
 
@@ -19,6 +21,12 @@ app = Flask(__name__)
 MONGO_URI = os.environ.get('MONGO_URI', 'mongodb+srv://username:password@cluster.mongodb.net/?retryWrites=true&w=majority')
 DB_NAME = os.environ.get('DB_NAME', 'HtechVolam')
 COLLECTION_NAME = os.environ.get('COLLECTION_NAME', 'server_status')
+
+# Discord Webhook Configuration
+DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK_URL', '')
+
+# Collection for excluded servers
+EXCLUDED_SERVERS_COLLECTION = 'excluded_servers'
 
 # Timezone Configuration
 # Use UTC to avoid timezone confusion between local and server environments
@@ -205,6 +213,134 @@ def api_all_profits():
     except Exception as e:
         print(f" Lỗi lấy báo cáo lợi nhuận tất cả máy: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/excluded-servers', methods=['GET'])
+def get_excluded_servers():
+    """Lấy danh sách máy loại trừ khỏi thông báo"""
+    collection = get_mongo_collection()
+    if collection is None:
+        return jsonify({'error': 'Không thể kết nối MongoDB'}), 500
+    
+    try:
+        excluded_collection = collection.database[EXCLUDED_SERVERS_COLLECTION]
+        doc = excluded_collection.find_one({'_id': 'excluded_list'})
+        
+        if doc and 'servers' in doc:
+            return jsonify({'excluded_servers': doc['servers']})
+        else:
+            return jsonify({'excluded_servers': []})
+    except Exception as e:
+        print(f"❌ Lỗi lấy danh sách máy loại trừ: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/excluded-servers', methods=['POST'])
+def update_excluded_servers():
+    """Cập nhật danh sách máy loại trừ khỏi thông báo"""
+    collection = get_mongo_collection()
+    if collection is None:
+        return jsonify({'error': 'Không thể kết nối MongoDB'}), 500
+    
+    try:
+        data = request.get_json()
+        excluded_servers = data.get('excluded_servers', [])
+        
+        excluded_collection = collection.database[EXCLUDED_SERVERS_COLLECTION]
+        excluded_collection.update_one(
+            {'_id': 'excluded_list'},
+            {'$set': {'servers': excluded_servers}},
+            upsert=True
+        )
+        
+        return jsonify({'success': True, 'excluded_servers': excluded_servers})
+    except Exception as e:
+        print(f"❌ Lỗi cập nhật danh sách máy loại trừ: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/check-offline-servers', methods=['POST'])
+def check_offline_servers():
+    """Kiểm tra máy offline và gửi thông báo Discord"""
+    if not DISCORD_WEBHOOK_URL:
+        return jsonify({'error': 'Discord webhook chưa được cấu hình'}), 400
+    
+    collection = get_mongo_collection()
+    if collection is None:
+        return jsonify({'error': 'Không thể kết nối MongoDB'}), 500
+    
+    try:
+        # Get excluded servers
+        excluded_collection = collection.database[EXCLUDED_SERVERS_COLLECTION]
+        excluded_doc = excluded_collection.find_one({'_id': 'excluded_list'})
+        excluded_servers = excluded_doc.get('servers', []) if excluded_doc else []
+        
+        # Get all servers
+        servers = get_all_servers()
+        
+        # Find offline servers (excluding the excluded ones)
+        offline_servers = []
+        for server in servers:
+            if not server['online'] and server['ten_may'] not in excluded_servers:
+                offline_servers.append(server)
+        
+        # Send Discord notification if there are offline servers
+        if offline_servers:
+            send_discord_notification(offline_servers)
+            return jsonify({
+                'success': True,
+                'offline_count': len(offline_servers),
+                'offline_servers': [s['ten_may'] for s in offline_servers]
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'offline_count': 0,
+                'message': 'Tất cả máy đều online'
+            })
+    except Exception as e:
+        print(f"❌ Lỗi kiểm tra máy offline: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+def send_discord_notification(offline_servers):
+    """Gửi thông báo Discord về các máy offline"""
+    if not DISCORD_WEBHOOK_URL:
+        return
+    
+    try:
+        # Build message
+        server_list = '\n'.join([f"• **{s['ten_may']}** - Offline {s['time_ago']}" for s in offline_servers])
+        
+        embed = {
+            "title": "⚠️ CẢNH BÁO: MÁY CHỦ OFFLINE",
+            "description": f"Phát hiện **{len(offline_servers)}** máy chủ đang offline:",
+            "color": 15158332,  # Red color
+            "fields": [
+                {
+                    "name": "Danh sách máy offline",
+                    "value": server_list,
+                    "inline": False
+                }
+            ],
+            "footer": {
+                "text": "Server Monitor - Htech Volam"
+            },
+            "timestamp": datetime.now(APP_TIMEZONE).isoformat()
+        }
+        
+        payload = {
+            "embeds": [embed]
+        }
+        
+        response = requests.post(DISCORD_WEBHOOK_URL, json=payload)
+        
+        if response.status_code == 204:
+            print(f"✅ Đã gửi thông báo Discord về {len(offline_servers)} máy offline")
+        else:
+            print(f"❌ Lỗi gửi Discord webhook: {response.status_code} - {response.text}")
+    except Exception as e:
+        print(f"❌ Lỗi gửi Discord notification: {e}")
 
 
 @app.route('/health')

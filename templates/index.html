@@ -446,6 +446,101 @@
             transform: translateY(0);
         }
 
+        /* Settings Button */
+        .settings-button {
+            position: fixed;
+            bottom: 200px;
+            right: 20px;
+            background: #f59e0b;
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            border-radius: 30px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .settings-button:hover {
+            background: #d97706;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+
+        .settings-button:active {
+            transform: translateY(0);
+        }
+
+        /* Excluded servers list */
+        .excluded-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .excluded-item {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 8px 15px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: bold;
+        }
+
+        .excluded-item button {
+            background: #991b1b;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .excluded-item button:hover {
+            background: #7f1d1d;
+        }
+
+        .add-excluded-form {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .add-excluded-form select {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
+        }
+
+        .add-excluded-form button {
+            padding: 10px 20px;
+            background: #10b981;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .add-excluded-form button:hover {
+            background: #059669;
+        }
+
         /* All Servers Table */
         .all-servers-table {
             width: 100%;
@@ -632,6 +727,12 @@
         </div>
         {% endif %}
 
+        <!-- Settings button -->
+        <button class="settings-button" onclick="showSettings()">
+            <span class="icon">⚙️</span>
+            <span class="text">Cài đặt</span>
+        </button>
+
         <!-- View All button -->
         <button class="view-all-button" onclick="showAllServers()">
             <span class="icon">📊</span>
@@ -681,6 +782,31 @@
         </div>
     </div>
 
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>⚙️ Cài đặt thông báo Discord</h2>
+                <span class="close" onclick="closeSettingsModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <h3>Máy loại trừ khỏi thông báo offline</h3>
+                <p style="color: #666; margin-bottom: 15px;">Các máy trong danh sách này sẽ không gửi thông báo Discord khi offline</p>
+                
+                <div id="excluded-servers-list" class="excluded-list">
+                    <div class="no-data">Đang tải...</div>
+                </div>
+                
+                <div class="add-excluded-form">
+                    <select id="server-select">
+                        <option value="">Chọn máy để thêm...</option>
+                    </select>
+                    <button onclick="addExcludedServer()">Thêm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Auto refresh every 30 minutes (1800000ms)
         const AUTO_REFRESH_TIME = 1800000; // 30 minutes
@@ -697,7 +823,10 @@
             
             // Set auto refresh
             refreshTimeout = setTimeout(function() {
-                location.reload();
+                // Check offline servers before reload
+                checkOfflineServers();
+                // Reload after 1 second
+                setTimeout(() => location.reload(), 1000);
             }, AUTO_REFRESH_TIME);
 
             // Update countdown every second
@@ -738,6 +867,149 @@
 
         function closeAllServersModal() {
             document.getElementById('allServersModal').style.display = 'none';
+        }
+
+        function closeSettingsModal() {
+            document.getElementById('settingsModal').style.display = 'none';
+        }
+
+        // Settings and excluded servers management
+        let allServerNames = [];
+        let excludedServers = [];
+
+        function showSettings() {
+            const modal = document.getElementById('settingsModal');
+            modal.style.display = 'block';
+            loadExcludedServers();
+            loadServerNames();
+        }
+
+        function loadServerNames() {
+            fetch('/api/servers')
+                .then(response => response.json())
+                .then(data => {
+                    allServerNames = data.map(s => s.ten_may).sort((a, b) => {
+                        const numA = parseInt(a.match(/\d+/)?.[0] || '0');
+                        const numB = parseInt(b.match(/\d+/)?.[0] || '0');
+                        return numA - numB;
+                    });
+                    updateServerSelect();
+                })
+                .catch(error => console.error('Error loading server names:', error));
+        }
+
+        function updateServerSelect() {
+            const select = document.getElementById('server-select');
+            select.innerHTML = '<option value="">Chọn máy để thêm...</option>';
+            
+            allServerNames.forEach(serverName => {
+                if (!excludedServers.includes(serverName)) {
+                    const option = document.createElement('option');
+                    option.value = serverName;
+                    option.textContent = serverName;
+                    select.appendChild(option);
+                }
+            });
+        }
+
+        function loadExcludedServers() {
+            fetch('/api/excluded-servers')
+                .then(response => response.json())
+                .then(data => {
+                    excludedServers = data.excluded_servers || [];
+                    renderExcludedServers();
+                    updateServerSelect();
+                })
+                .catch(error => {
+                    console.error('Error loading excluded servers:', error);
+                    document.getElementById('excluded-servers-list').innerHTML = '<div class="no-data">Lỗi tải dữ liệu</div>';
+                });
+        }
+
+        function renderExcludedServers() {
+            const container = document.getElementById('excluded-servers-list');
+            
+            if (excludedServers.length === 0) {
+                container.innerHTML = '<div class="no-data">Chưa có máy nào được loại trừ</div>';
+                return;
+            }
+            
+            container.innerHTML = '';
+            excludedServers.forEach(serverName => {
+                const item = document.createElement('div');
+                item.className = 'excluded-item';
+                item.innerHTML = `
+                    <span>${serverName}</span>
+                    <button onclick="removeExcludedServer('${serverName}')" title="Xóa">×</button>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function addExcludedServer() {
+            const select = document.getElementById('server-select');
+            const serverName = select.value;
+            
+            if (!serverName) {
+                alert('Vui lòng chọn máy');
+                return;
+            }
+            
+            if (excludedServers.includes(serverName)) {
+                alert('Máy này đã có trong danh sách');
+                return;
+            }
+            
+            excludedServers.push(serverName);
+            saveExcludedServers();
+        }
+
+        function removeExcludedServer(serverName) {
+            excludedServers = excludedServers.filter(s => s !== serverName);
+            saveExcludedServers();
+        }
+
+        function saveExcludedServers() {
+            fetch('/api/excluded-servers', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ excluded_servers: excludedServers })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    renderExcludedServers();
+                    updateServerSelect();
+                } else {
+                    alert('Lỗi lưu dữ liệu');
+                }
+            })
+            .catch(error => {
+                console.error('Error saving excluded servers:', error);
+                alert('Lỗi lưu dữ liệu');
+            });
+        }
+
+        // Check offline servers and send Discord notification
+        function checkOfflineServers() {
+            fetch('/api/check-offline-servers', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    if (data.offline_count > 0) {
+                        console.log(`⚠️ Phát hiện ${data.offline_count} máy offline, đã gửi thông báo Discord`);
+                    } else {
+                        console.log('✅ Tất cả máy đều online');
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error checking offline servers:', error);
+            });
         }
 
         function showAllServers() {
@@ -946,16 +1218,26 @@
                 });
         }
 
+        // Check offline servers on page load
+        window.addEventListener('load', function() {
+            // Wait 2 seconds after page load to check offline servers
+            setTimeout(checkOfflineServers, 2000);
+        });
+
         // Close modal when clicking outside
         window.onclick = function(event) {
             const profitModal = document.getElementById('profitModal');
             const allServersModal = document.getElementById('allServersModal');
+            const settingsModal = document.getElementById('settingsModal');
             
             if (event.target == profitModal) {
                 profitModal.style.display = 'none';
             }
             if (event.target == allServersModal) {
                 allServersModal.style.display = 'none';
+            }
+            if (event.target == settingsModal) {
+                settingsModal.style.display = 'none';
             }
         }
     </script>
