@@ -634,6 +634,52 @@
             background: #059669;
         }
 
+        /* Refresh time settings */
+        .refresh-time-setting {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 2px solid #e5e7eb;
+        }
+
+        .refresh-time-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .refresh-time-controls input {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
+            width: 100px;
+        }
+
+        .refresh-time-controls button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .refresh-time-controls button:hover {
+            background: #5568d3;
+        }
+
+        .refresh-time-info {
+            background: #f0f9ff;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            color: #0369a1;
+            font-size: 0.9em;
+        }
+
         /* All Servers Table */
         .all-servers-table {
             width: 100%;
@@ -644,8 +690,9 @@
         .all-servers-table th,
         .all-servers-table td {
             border: 1px solid #ddd;
-            padding: 12px;
+            padding: 8px;
             text-align: center;
+            font-size: 0.9em;
         }
 
         .all-servers-table th {
@@ -655,6 +702,8 @@
             position: sticky;
             top: 0;
             z-index: 10;
+            font-size: 0.85em;
+            padding: 10px 8px;
         }
 
         .all-servers-table tr:nth-child(even) {
@@ -677,11 +726,11 @@
 
         /* Account cell styling */
         .account-cell {
-            padding: 8px;
-            border-radius: 6px;
+            padding: 6px 8px;
+            border-radius: 4px;
             margin: 2px;
             display: inline-block;
-            min-width: 120px;
+            min-width: 90px;
         }
 
         .account-cell.status-tang {
@@ -704,15 +753,15 @@
 
         .account-name {
             font-weight: bold;
-            font-size: 0.9em;
+            font-size: 0.8em;
             display: block;
         }
 
         .account-profit {
-            font-size: 1.1em;
+            font-size: 1em;
             font-weight: bold;
             display: block;
-            margin-top: 4px;
+            margin-top: 2px;
         }
     </style>
 </head>
@@ -867,6 +916,22 @@
                     </select>
                     <button onclick="addExcludedServer()">Thêm</button>
                 </div>
+
+                <!-- Refresh Time Settings -->
+                <div class="refresh-time-setting">
+                    <h3>Thời gian tự động làm mới</h3>
+                    <p>Cài đặt thời gian tự động làm mới trang và kiểm tra máy offline</p>
+                    
+                    <div class="refresh-time-controls">
+                        <label><strong>Thời gian (phút):</strong></label>
+                        <input type="number" id="refresh-minutes" min="1" max="1440" value="30" />
+                        <button onclick="updateRefreshTime()">Cập nhật</button>
+                    </div>
+                    
+                    <div class="refresh-time-info" id="refresh-time-info">
+                        ⏱️ Hiện tại: Tự động làm mới mỗi <strong>30 phút</strong>
+                    </div>
+                </div>
             </div>
         </div>
         <!-- End Tab: Settings -->
@@ -901,11 +966,54 @@
 
 
     <script>
-        // Auto refresh every 30 minutes (1800000ms)
-        const AUTO_REFRESH_TIME = 1800000; // 30 minutes
+        // Auto refresh configuration
+        let AUTO_REFRESH_TIME = 1800000; // Default: 30 minutes (1800000ms)
         let refreshTimeout;
         let countdownInterval;
         let remainingTime = AUTO_REFRESH_TIME;
+
+        // Load saved refresh time from localStorage
+        function loadRefreshTime() {
+            const saved = localStorage.getItem('autoRefreshMinutes');
+            if (saved) {
+                const minutes = parseInt(saved);
+                AUTO_REFRESH_TIME = minutes * 60 * 1000;
+                document.getElementById('refresh-minutes').value = minutes;
+                updateRefreshTimeInfo(minutes);
+            }
+        }
+
+        // Update refresh time
+        function updateRefreshTime() {
+            const minutes = parseInt(document.getElementById('refresh-minutes').value);
+            
+            if (isNaN(minutes) || minutes < 1 || minutes > 1440) {
+                alert('Vui lòng nhập thời gian từ 1 đến 1440 phút (24 giờ)');
+                return;
+            }
+            
+            // Save to localStorage
+            localStorage.setItem('autoRefreshMinutes', minutes);
+            
+            // Update global variable
+            AUTO_REFRESH_TIME = minutes * 60 * 1000;
+            
+            // Restart auto refresh with new time
+            startAutoRefresh();
+            
+            // Update info display
+            updateRefreshTimeInfo(minutes);
+            
+            alert(`Đã cập nhật thời gian tự động làm mới: ${minutes} phút`);
+        }
+
+        // Update refresh time info display
+        function updateRefreshTimeInfo(minutes) {
+            const infoEl = document.getElementById('refresh-time-info');
+            if (infoEl) {
+                infoEl.innerHTML = `⏱️ Hiện tại: Tự động làm mới mỗi <strong>${minutes} phút</strong>`;
+            }
+        }
 
         function startAutoRefresh() {
             // Clear existing timeout
@@ -1144,12 +1252,30 @@
             
             modalContent.innerHTML = '<div class="no-data">Đang tải dữ liệu...</div>';
             
-            // Fetch all profits data
-            fetch('/api/all-profits')
-                .then(response => response.json())
-                .then(data => {
-                    if (!data || data.length === 0) {
+            // Fetch all profits data and server status
+            Promise.all([
+                fetch('/api/all-profits').then(r => r.json()),
+                fetch('/api/servers').then(r => r.json())
+            ])
+                .then(([profitData, serverData]) => {
+                    if (!profitData || profitData.length === 0) {
                         modalContent.innerHTML = '<div class="no-data">Không có dữ liệu doanh thu</div>';
+                        return;
+                    }
+                    
+                    // Create a map of online servers
+                    const onlineServers = new Set();
+                    serverData.forEach(server => {
+                        if (server.online) {
+                            onlineServers.add(server.ten_may);
+                        }
+                    });
+                    
+                    // Filter only online machines
+                    const data = profitData.filter(item => onlineServers.has(item.ten_may));
+                    
+                    if (data.length === 0) {
+                        modalContent.innerHTML = '<div class="no-data">Không có máy nào đang online</div>';
                         return;
                     }
                     
@@ -1194,14 +1320,14 @@
                     
                     // Create table
                     let html = `
-                        <div style="margin-bottom: 20px; padding: 15px; background: #f0f9ff; border-radius: 8px; text-align: center;">
-                            <h3 style="margin: 0; color: #333;">Tổng lợi nhuận: <span style="color: ${grandTotal >= 0 ? '#10b981' : '#ef4444'}; font-size: 1.3em;">${grandTotal.toFixed(2)}</span></h3>
+                        <div style="margin-bottom: 15px; padding: 12px; background: #f0f9ff; border-radius: 8px; text-align: center;">
+                            <h3 style="margin: 0; color: #333; font-size: 1.1em;">Tổng lợi nhuận (${machines.length} máy online): <span style="color: ${grandTotal >= 0 ? '#10b981' : '#ef4444'}; font-size: 1.2em;">${grandTotal.toFixed(2)}</span></h3>
                         </div>
                         <div style="overflow-x: auto;">
                         <table class="all-servers-table" style="min-width: 100%;">
                             <thead>
                                 <tr>
-                                    <th style="width: 60px;">STT</th>
+                                    <th style="width: 50px;">STT</th>
                     `;
                     
                     // Add machine columns
@@ -1347,8 +1473,14 @@
                 });
         }
 
-        // Check offline servers on page load
+        // Initialize on page load
         window.addEventListener('load', function() {
+            // Load saved refresh time
+            loadRefreshTime();
+            
+            // Start auto refresh countdown
+            startAutoRefresh();
+            
             // Wait 2 seconds after page load to check offline servers
             setTimeout(checkOfflineServers, 2000);
         });
