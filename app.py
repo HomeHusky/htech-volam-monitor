@@ -511,95 +511,61 @@ def send_email_notification(offline_servers, unchanged_accounts):
         return
     
     try:
-        # Build email content
-        html_content = """
-        <html>
-        <head>
-            <style>
-                body { font-family: Arial, sans-serif; }
-                h2 { color: #333; }
-                .section { margin: 20px 0; }
-                .offline { background: #fee2e2; padding: 15px; border-radius: 8px; margin: 10px 0; }
-                .unchanged { background: #fef3c7; padding: 15px; border-radius: 8px; margin: 10px 0; }
-                table { border-collapse: collapse; width: 100%; margin-top: 10px; }
-                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                th { background-color: #667eea; color: white; }
-                .warning { color: #dc2626; font-weight: bold; }
-                .info { color: #d97706; font-weight: bold; }
-            </style>
-        </head>
-        <body>
-            <h2>🔔 Báo cáo giám sát hệ thống</h2>
-            <p><strong>Thời gian:</strong> {timestamp}</p>
-        """.format(timestamp=datetime.now(APP_TIMEZONE).strftime('%Y-%m-%d %H:%M:%S'))
+        timestamp = datetime.now(APP_TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Build HTML email
+        html_parts = []
+        html_parts.append('<html><head><style>')
+        html_parts.append('body { font-family: Arial, sans-serif; }')
+        html_parts.append('h2 { color: #333; }')
+        html_parts.append('.section { margin: 20px 0; }')
+        html_parts.append('.offline { background: #fee2e2; padding: 15px; border-radius: 8px; margin: 10px 0; }')
+        html_parts.append('.unchanged { background: #fef3c7; padding: 15px; border-radius: 8px; margin: 10px 0; }')
+        html_parts.append('table { border-collapse: collapse; width: 100%; margin-top: 10px; }')
+        html_parts.append('th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }')
+        html_parts.append('th { background-color: #667eea; color: white; }')
+        html_parts.append('.warning { color: #dc2626; font-weight: bold; }')
+        html_parts.append('.info { color: #d97706; font-weight: bold; }')
+        html_parts.append('</style></head><body>')
+        html_parts.append(f'<h2>🔔 Báo cáo giám sát hệ thống</h2>')
+        html_parts.append(f'<p><strong>Thời gian:</strong> {timestamp}</p>')
         
         # Offline servers section
         if offline_servers:
-            html_content += """
-            <div class="section offline">
-                <h3 class="warning">⚠️ Máy Offline ({count})</h3>
-                <table>
-                    <tr>
-                        <th>Tên máy</th>
-                        <th>Lần cập nhật cuối</th>
-                        <th>Thời gian offline</th>
-                    </tr>
-            """.format(count=len(offline_servers))
+            html_parts.append('<div class="section offline">')
+            html_parts.append(f'<h3 class="warning">⚠️ Máy Offline ({len(offline_servers)})</h3>')
+            html_parts.append('<table><tr><th>Tên máy</th><th>Lần cập nhật cuối</th><th>Thời gian offline</th></tr>')
             
             for server in offline_servers:
-                html_content += """
-                    <tr>
-                        <td>{name}</td>
-                        <td>{last_update}</td>
-                        <td>{offline_time}</td>
-                    </tr>
-                """.format(
-                    name=server['ten_may'],
-                    last_update=server.get('last_update_str', 'N/A'),
-                    offline_time=server.get('time_diff', 'N/A')
-                )
+                name = server['ten_may']
+                last_update = server.get('last_update_str', 'N/A')
+                offline_time = server.get('time_diff', 'N/A')
+                html_parts.append(f'<tr><td>{name}</td><td>{last_update}</td><td>{offline_time}</td></tr>')
             
-            html_content += """</table></div>"""
+            html_parts.append('</table></div>')
         else:
-            html_content += """<div class="section"><p>✅ Tất cả máy đều online</p></div>"""
+            html_parts.append('<div class="section"><p>✅ Tất cả máy đều online</p></div>')
         
         # Unchanged accounts section
         if unchanged_accounts:
-            html_content += """
-            <div class="section unchanged">
-                <h3 class="info">📊 Account Không Đổi ({count})</h3>
-                <table>
-                    <tr>
-                        <th>Máy</th>
-                        <th>Account</th>
-                        <th>Tiền cũ</th>
-                        <th>Tiền mới</th>
-                        <th>Lợi nhuận</th>
-                    </tr>
-            """.format(count=len(unchanged_accounts))
+            html_parts.append('<div class="section unchanged">')
+            html_parts.append(f'<h3 class="info">📊 Account Không Đổi ({len(unchanged_accounts)})</h3>')
+            html_parts.append('<table><tr><th>Máy</th><th>Account</th><th>Tiền cũ</th><th>Tiền mới</th><th>Lợi nhuận</th></tr>')
             
             for acc in unchanged_accounts:
-                html_content += """
-                    <tr>
-                        <td>{machine}</td>
-                        <td>{account}</td>
-                        <td>{old:.2f}</td>
-                        <td>{new:.2f}</td>
-                        <td>{profit:.2f}</td>
-                    </tr>
-                """.format(
-                    machine=acc['machine'],
-                    account=acc['account'],
-                    old=acc['old'],
-                    new=acc['new'],
-                    profit=acc['profit']
-                )
+                machine = acc['machine']
+                account = acc['account']
+                old = acc['old']
+                new = acc['new']
+                profit = acc['profit']
+                html_parts.append(f'<tr><td>{machine}</td><td>{account}</td><td>{old:.2f}</td><td>{new:.2f}</td><td>{profit:.2f}</td></tr>')
             
-            html_content += """</table></div>"""
+            html_parts.append('</table></div>')
         else:
-            html_content += """<div class="section"><p>✅ Không có account nào ở trạng thái 'Không đổi'</p></div>"""
+            html_parts.append('<div class="section"><p>✅ Không có account nào ở trạng thái Không đổi</p></div>')
         
-        html_content += """</body></html>"""
+        html_parts.append('</body></html>')
+        html_content = ''.join(html_parts)
         
         # Create and send email
         subject = f"🔔 Báo cáo hệ thống - {len(offline_servers)} máy offline, {len(unchanged_accounts)} account không đổi"
@@ -615,6 +581,8 @@ def send_email_notification(offline_servers, unchanged_accounts):
         
     except Exception as e:
         print(f"❌ Lỗi gửi email: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def check_and_notify_offline_servers():
