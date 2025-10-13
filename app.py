@@ -346,7 +346,7 @@ def send_comprehensive_discord_notification(offline_servers, unchanged_accounts,
         # Unchanged accounts section
         if unchanged_accounts:
             account_list = '\n'.join([
-                f"• **{acc['machine']}** - {acc['account']} (Không đổi: {acc['old']:.2f} → {acc['new']:.2f})"
+                f"• **{acc['machine']}** - {acc['account']} (Không đổi)"
                 for acc in unchanged_accounts[:10]  # Limit to 10 for Discord message size
             ])
             if len(unchanged_accounts) > 10:
@@ -361,7 +361,7 @@ def send_comprehensive_discord_notification(offline_servers, unchanged_accounts,
         # Decreased accounts section
         if decreased_accounts:
             account_list = '\n'.join([
-                f"• **{acc['machine']}** - {acc['account']} (Giảm: {acc['old']:.2f} → {acc['new']:.2f})"
+                f"• **{acc['machine']}** - {acc['account']} (Giảm)"
                 for acc in decreased_accounts[:10]  # Limit to 10 for Discord message size
             ])
             if len(decreased_accounts) > 10:
@@ -510,28 +510,40 @@ def get_unchanged_accounts():
         profit_collection = collection.database[PROFIT_REPORTS_COLLECTION]
         unchanged_accounts = []
 
-        print(f"🔍 Checking {len(online_machines)} online machines for unchanged accounts (based on money comparison)")
+        print(f"🔍 Checking {len(online_machines)} online machines for unchanged accounts (based on status text)")
 
         for machine in online_machines:
             report = profit_collection.find_one({'ten_may': machine})
             if report and 'report' in report:
                 print(f"📋 Machine {machine}: Found {len(report['report'])} accounts")
                 for acc in report['report']:
-                    old_money = acc.get('old', 0) or 0
-                    new_money = acc.get('new', 0) or 0
-                    profit = acc.get('profit', 0) or 0
+                    status = (acc.get('status', '') or '').lower().strip()
+                    account_name = acc.get('account', 'N/A')
 
-                    print(f"  Account {acc.get('account', 'N/A')}: old={old_money}, new={new_money}, profit={profit}")
+                    print(f"  Account {account_name}: status='{status}'")
 
-                    # Check if money is unchanged (old == new)
-                    if old_money == new_money or profit == 0:
-                        print(f"    ✅ Found unchanged account: {acc.get('account', 'N/A')} (money unchanged)")
+                    # Normalize status for comparison (same logic as profit table)
+                    normalized_status = status.lower().strip()
+
+                    # Check for "Không đổi" (neutral/gray in table)
+                    is_unchanged = (
+                        'không đổi' in normalized_status or
+                        normalized_status == 'không đổi' or
+                        normalized_status == 'khôngđổi' or
+                        normalized_status == 'k đổi' or
+                        (not normalized_status) or  # Empty status
+                        (not any(keyword in normalized_status for keyword in ['tăng', 'giảm', 'chưa đạt', 'đạt kpi']))
+                    )
+
+                    if is_unchanged:
+                        print(f"    ✅ Found unchanged account: {account_name} (status: '{status}')")
                         unchanged_accounts.append({
                             'machine': machine,
-                            'account': acc.get('account', 'N/A'),
-                            'profit': profit,
-                            'old': old_money,
-                            'new': new_money
+                            'account': account_name,
+                            'profit': acc.get('profit', 0),
+                            'old': acc.get('old', 0),
+                            'new': acc.get('new', 0),
+                            'status': status
                         })
 
         print(f"📊 Total unchanged accounts found: {len(unchanged_accounts)}")
@@ -562,28 +574,40 @@ def get_decreased_accounts():
         profit_collection = collection.database[PROFIT_REPORTS_COLLECTION]
         decreased_accounts = []
 
-        print(f"🔍 Checking {len(online_machines)} online machines for decreased accounts (based on money comparison)")
+        print(f"🔍 Checking {len(online_machines)} online machines for decreased accounts (based on status text)")
 
         for machine in online_machines:
             report = profit_collection.find_one({'ten_may': machine})
             if report and 'report' in report:
                 print(f"📋 Machine {machine}: Found {len(report['report'])} accounts")
                 for acc in report['report']:
-                    old_money = acc.get('old', 0) or 0
-                    new_money = acc.get('new', 0) or 0
-                    profit = acc.get('profit', 0) or 0
+                    status = (acc.get('status', '') or '').lower().strip()
+                    account_name = acc.get('account', 'N/A')
 
-                    print(f"  Account {acc.get('account', 'N/A')}: old={old_money}, new={new_money}, profit={profit}")
+                    print(f"  Account {account_name}: status='{status}'")
 
-                    # Check if money decreased (new < old)
-                    if new_money < old_money and profit < 0:
-                        print(f"    ✅ Found decreased account: {acc.get('account', 'N/A')} (money decreased)")
+                    # Normalize status for comparison (same logic as profit table)
+                    normalized_status = status.lower().strip()
+
+                    # Check for negative statuses: "Chưa đạt KPI", "Chưa đạt", "Giảm"
+                    # IMPORTANT: Check negative statuses FIRST (because "chưa đạt kpi" contains "đạt kpi")
+                    is_decreased = (
+                        'chưa đạt kpi' in normalized_status or
+                        'chưa đạt' in normalized_status or
+                        'giảm' in normalized_status or
+                        normalized_status == 'giảm' or
+                        normalized_status == 'giam'
+                    )
+
+                    if is_decreased:
+                        print(f"    ✅ Found decreased account: {account_name} (status: '{status}')")
                         decreased_accounts.append({
                             'machine': machine,
-                            'account': acc.get('account', 'N/A'),
-                            'profit': profit,
-                            'old': old_money,
-                            'new': new_money
+                            'account': account_name,
+                            'profit': acc.get('profit', 0),
+                            'old': acc.get('old', 0),
+                            'new': acc.get('new', 0),
+                            'status': status
                         })
 
         print(f"📉 Total decreased accounts found: {len(decreased_accounts)}")
