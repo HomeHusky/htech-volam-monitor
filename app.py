@@ -7,7 +7,6 @@ Deploy lên Render.com
 """
 
 from flask import Flask, render_template, jsonify, request
-from flask_mail import Mail, Message
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from datetime import datetime, timedelta, timezone
@@ -18,19 +17,6 @@ import threading
 import time
 
 app = Flask(__name__)
-
-# Email Configuration
-app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
-app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
-app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'True').lower() == 'true'
-app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')
-app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
-app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', '')
-
-mail = Mail(app)
-
-# Email recipients
-MAIL_RECIPIENTS = os.environ.get('MAIL_RECIPIENTS', '').split(',') if os.environ.get('MAIL_RECIPIENTS') else []
 
 # MongoDB Configuration with timezone handling
 # ⚠️ IMPORTANT: Set MONGO_URI as environment variable on Render
@@ -332,44 +318,80 @@ def check_offline_servers():
         return jsonify({'error': str(e)}), 500
 
 
-def send_discord_notification(offline_servers):
-    """Gửi thông báo Discord về các máy offline"""
+def send_comprehensive_discord_notification(offline_servers, unchanged_accounts, decreased_accounts):
+    """Gửi thông báo Discord tổng hợp về máy offline và tài khoản có vấn đề"""
     if not DISCORD_WEBHOOK_URL:
         return
-    
+
     try:
-        # Build message
-        server_list = '\n'.join([f"• **{s['ten_may']}** - Offline {s['time_ago']}" for s in offline_servers])
-        
         embed = {
-            "title": "⚠️ CẢNH BÁO: MÁY CHỦ OFFLINE",
-            "description": f"Phát hiện **{len(offline_servers)}** máy chủ đang offline:",
-            "color": 15158332,  # Red color
-            "fields": [
-                {
-                    "name": "Danh sách máy offline",
-                    "value": server_list,
-                    "inline": False
-                }
-            ],
+            "title": "📊 BÁO CÁO HỆ THỐNG",
+            "color": 3447003,  # Blue color
+            "fields": [],
             "footer": {
                 "text": "Server Monitor - Htech Volam"
             },
             "timestamp": datetime.now(APP_TIMEZONE).isoformat()
         }
-        
+
+        # Offline servers section
+        if offline_servers:
+            server_list = '\n'.join([f"• **{s['ten_may']}** - Offline {s['time_ago']}" for s in offline_servers])
+            embed["fields"].append({
+                "name": f"⚠️ Máy Offline ({len(offline_servers)})",
+                "value": server_list,
+                "inline": False
+            })
+
+        # Unchanged accounts section
+        if unchanged_accounts:
+            account_list = '\n'.join([
+                f"• **{acc['machine']}** - {acc['account']} (Không đổi: {acc['old']:.2f} → {acc['new']:.2f})"
+                for acc in unchanged_accounts[:10]  # Limit to 10 for Discord message size
+            ])
+            if len(unchanged_accounts) > 10:
+                account_list += f"\n• ... và {len(unchanged_accounts) - 10} tài khoản khác"
+
+            embed["fields"].append({
+                "name": f"📊 Tài Khoản Không Đổi ({len(unchanged_accounts)})",
+                "value": account_list,
+                "inline": False
+            })
+
+        # Decreased accounts section
+        if decreased_accounts:
+            account_list = '\n'.join([
+                f"• **{acc['machine']}** - {acc['account']} (Giảm: {acc['old']:.2f} → {acc['new']:.2f})"
+                for acc in decreased_accounts[:10]  # Limit to 10 for Discord message size
+            ])
+            if len(decreased_accounts) > 10:
+                account_list += f"\n• ... và {len(decreased_accounts) - 10} tài khoản khác"
+
+            embed["fields"].append({
+                "name": f"📉 Tài Khoản Giảm ({len(decreased_accounts)})",
+                "value": account_list,
+                "inline": False
+            })
+
+        # Set description based on content
+        total_issues = len(offline_servers) + len(unchanged_accounts) + len(decreased_accounts)
+        if total_issues == 0:
+            embed["description"] = "✅ Tất cả máy đều online và không có tài khoản có vấn đề"
+        else:
+            embed["description"] = f"📋 Phát hiện **{total_issues}** vấn đề cần chú ý"
+
         payload = {
             "embeds": [embed]
         }
-        
+
         response = requests.post(DISCORD_WEBHOOK_URL, json=payload)
-        
+
         if response.status_code == 204:
-            print(f"✅ Đã gửi thông báo Discord về {len(offline_servers)} máy offline")
+            print(f"✅ Đã gửi báo cáo Discord tổng hợp: {len(offline_servers)} máy offline, {len(unchanged_accounts)} tài khoản không đổi, {len(decreased_accounts)} tài khoản giảm")
         else:
             print(f"❌ Lỗi gửi Discord webhook: {response.status_code} - {response.text}")
     except Exception as e:
-        print(f"❌ Lỗi gửi Discord notification: {e}")
+        print(f"❌ Lỗi gửi Discord notification tổng hợp: {e}")
 
 
 @app.route('/api/monitoring-settings', methods=['GET'])
@@ -504,132 +526,83 @@ def get_unchanged_accounts():
         return []
 
 
-def send_email_notification(offline_servers, unchanged_accounts):
-    """Gửi email thông báo về máy offline và account không đổi"""
-    if not MAIL_RECIPIENTS or not app.config['MAIL_USERNAME']:
-        print("⚠️ Email not configured, skipping email notification")
-        return
+def get_decreased_accounts():
+    """Lấy danh sách các account có trạng thái 'Giảm' ở máy online"""
+    collection = get_mongo_collection()
+    if collection is None:
+        return []
     
     try:
-        # Use application context for Flask-Mail
-        with app.app_context():
-            timestamp = datetime.now(APP_TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')
-            
-            # Build HTML email
-            html_parts = []
-            html_parts.append('<html><head><style>')
-            html_parts.append('body { font-family: Arial, sans-serif; }')
-            html_parts.append('h2 { color: #333; }')
-            html_parts.append('.section { margin: 20px 0; }')
-            html_parts.append('.offline { background: #fee2e2; padding: 15px; border-radius: 8px; margin: 10px 0; }')
-            html_parts.append('.unchanged { background: #fef3c7; padding: 15px; border-radius: 8px; margin: 10px 0; }')
-            html_parts.append('table { border-collapse: collapse; width: 100%; margin-top: 10px; }')
-            html_parts.append('th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }')
-            html_parts.append('th { background-color: #667eea; color: white; }')
-            html_parts.append('.warning { color: #dc2626; font-weight: bold; }')
-            html_parts.append('.info { color: #d97706; font-weight: bold; }')
-            html_parts.append('</style></head><body>')
-            html_parts.append(f'<h2>🔔 Báo cáo giám sát hệ thống</h2>')
-            html_parts.append(f'<p><strong>Thời gian:</strong> {timestamp}</p>')
-            
-            # Offline servers section
-            if offline_servers:
-                html_parts.append('<div class="section offline">')
-                html_parts.append(f'<h3 class="warning">⚠️ Máy Offline ({len(offline_servers)})</h3>')
-                html_parts.append('<table><tr><th>Tên máy</th><th>Lần cập nhật cuối</th><th>Thời gian offline</th></tr>')
-                
-                for server in offline_servers:
-                    name = server['ten_may']
-                    last_update = server.get('last_update_str', 'N/A')
-                    offline_time = server.get('time_diff', 'N/A')
-                    html_parts.append(f'<tr><td>{name}</td><td>{last_update}</td><td>{offline_time}</td></tr>')
-                
-                html_parts.append('</table></div>')
-            else:
-                html_parts.append('<div class="section"><p>✅ Tất cả máy đều online</p></div>')
-            
-            # Unchanged accounts section
-            if unchanged_accounts:
-                html_parts.append('<div class="section unchanged">')
-                html_parts.append(f'<h3 class="info">📊 Account Không Đổi ({len(unchanged_accounts)})</h3>')
-                html_parts.append('<table><tr><th>Máy</th><th>Account</th><th>Tiền cũ</th><th>Tiền mới</th><th>Lợi nhuận</th></tr>')
-                
-                for acc in unchanged_accounts:
-                    machine = acc['machine']
-                    account = acc['account']
-                    old = acc['old']
-                    new = acc['new']
-                    profit = acc['profit']
-                    html_parts.append(f'<tr><td>{machine}</td><td>{account}</td><td>{old:.2f}</td><td>{new:.2f}</td><td>{profit:.2f}</td></tr>')
-                
-                html_parts.append('</table></div>')
-            else:
-                html_parts.append('<div class="section"><p>✅ Không có account nào ở trạng thái Không đổi</p></div>')
-            
-            html_parts.append('</body></html>')
-            html_content = ''.join(html_parts)
-            
-            # Create and send email
-            subject = f"🔔 Báo cáo hệ thống - {len(offline_servers)} máy offline, {len(unchanged_accounts)} account không đổi"
-            
-            msg = Message(
-                subject=subject,
-                recipients=MAIL_RECIPIENTS,
-                html=html_content
-            )
-            
-            mail.send(msg)
-            print(f"✅ Đã gửi email đến {len(MAIL_RECIPIENTS)} người nhận")
+        # Get online servers
+        servers = get_all_servers()
+        online_machines = [s['ten_may'] for s in servers if s['online']]
         
+        # Get profit reports for online machines
+        profit_collection = collection.database[PROFIT_REPORTS_COLLECTION]
+        decreased_accounts = []
+        
+        for machine in online_machines:
+            report = profit_collection.find_one({'ten_may': machine})
+            if report and 'report' in report:
+                for acc in report['report']:
+                    status = (acc.get('status', '') or '').lower().strip()
+                    if 'giảm' in status or status == 'giảm':
+                        decreased_accounts.append({
+                            'machine': machine,
+                            'account': acc.get('account', 'N/A'),
+                            'profit': acc.get('profit', 0),
+                            'old': acc.get('old', 0),
+                            'new': acc.get('new', 0)
+                        })
+        
+        return decreased_accounts
     except Exception as e:
-        print(f"❌ Lỗi gửi email: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"❌ Error getting decreased accounts: {e}")
+        return []
 
 
 def check_and_notify_offline_servers():
-    """Kiểm tra máy offline và gửi thông báo Discord + Email"""
+    """Kiểm tra máy offline và gửi thông báo Discord cho cả máy offline và tài khoản không đổi/giảm"""
     collection = get_mongo_collection()
     if collection is None:
         print("❌ Cannot connect to MongoDB")
         return
-    
+
     try:
         # Get excluded servers
         excluded_collection = collection.database[EXCLUDED_SERVERS_COLLECTION]
         excluded_doc = excluded_collection.find_one({'_id': 'excluded_list'})
         excluded_servers = excluded_doc.get('servers', []) if excluded_doc else []
-        
+
         # Get all servers
         servers = get_all_servers()
-        
+
         # Find offline servers (excluding the excluded ones)
         offline_servers = []
         for server in servers:
             if not server['online'] and server['ten_may'] not in excluded_servers:
                 offline_servers.append(server)
-        
-        # Get unchanged accounts from online machines
+
+        # Get accounts with issues from online machines
         unchanged_accounts = get_unchanged_accounts()
-        
-        # Send Discord notification if there are offline servers
-        if offline_servers and DISCORD_WEBHOOK_URL:
-            send_discord_notification(offline_servers)
-            print(f"✅ Sent Discord notification for {len(offline_servers)} offline servers")
-        
-        # Send email notification (always send if configured)
-        if MAIL_RECIPIENTS and app.config['MAIL_USERNAME']:
-            send_email_notification(offline_servers, unchanged_accounts)
-        
+        decreased_accounts = get_decreased_accounts()
+
+        # Send Discord notification if there are issues
+        if (offline_servers or unchanged_accounts or decreased_accounts) and DISCORD_WEBHOOK_URL:
+            send_comprehensive_discord_notification(offline_servers, unchanged_accounts, decreased_accounts)
+            print(f"✅ Sent comprehensive Discord notification")
+
         # Log results
         if offline_servers:
             print(f"⚠️ Found {len(offline_servers)} offline servers")
-        else:
-            print("✅ All servers are online")
-        
         if unchanged_accounts:
             print(f"📊 Found {len(unchanged_accounts)} unchanged accounts")
-            
+        if decreased_accounts:
+            print(f"📉 Found {len(decreased_accounts)} decreased accounts")
+
+        if not offline_servers and not unchanged_accounts and not decreased_accounts:
+            print("✅ All servers are online and no problematic accounts")
+
     except Exception as e:
         print(f"❌ Error checking offline servers: {e}")
 
