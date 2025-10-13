@@ -984,8 +984,12 @@
                     if (data.check_interval_minutes) {
                         const minutes = data.check_interval_minutes;
                         AUTO_REFRESH_TIME = minutes * 60 * 1000;
+                        remainingTime = AUTO_REFRESH_TIME; // Update countdown immediately
                         document.getElementById('refresh-minutes').value = minutes;
                         updateRefreshTimeInfo(minutes);
+
+                        // Update countdown display immediately
+                        updateCountdown(remainingTime);
                     }
                 })
                 .catch(error => {
@@ -996,12 +1000,12 @@
         // Update refresh time
         function updateRefreshTime() {
             const minutes = parseInt(document.getElementById('refresh-minutes').value);
-            
+
             if (isNaN(minutes) || minutes < 1 || minutes > 1440) {
                 alert('Vui lòng nhập thời gian từ 1 đến 1440 phút (24 giờ)');
                 return;
             }
-            
+
             // Save to server
             fetch('/api/monitoring-settings', {
                 method: 'POST',
@@ -1013,15 +1017,16 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Update global variable
+                    // Update global variable immediately
                     AUTO_REFRESH_TIME = minutes * 60 * 1000;
-                    
+                    remainingTime = AUTO_REFRESH_TIME; // Reset countdown
+
                     // Restart auto refresh with new time
                     startAutoRefresh();
-                    
+
                     // Update info display
                     updateRefreshTimeInfo(minutes);
-                    
+
                     alert(`✅ Đã lưu cài đặt!\n\nServer sẽ kiểm tra máy offline mỗi ${minutes} phút và gửi thông báo Discord nếu phát hiện máy offline.`);
                 } else {
                     alert('❌ Lỗi: ' + (data.error || 'Không thể lưu cài đặt'));
@@ -1046,13 +1051,11 @@
             if (refreshTimeout) clearTimeout(refreshTimeout);
             if (countdownInterval) clearInterval(countdownInterval);
 
-            remainingTime = AUTO_REFRESH_TIME;
-            
             // Set auto refresh
             refreshTimeout = setTimeout(function() {
                 // Just reload, server will handle checking offline servers
                 location.reload();
-            }, AUTO_REFRESH_TIME);
+            }, remainingTime);
 
             // Update countdown every second
             countdownInterval = setInterval(function() {
@@ -1503,11 +1506,13 @@
 
         // Initialize on page load
         window.addEventListener('load', function() {
-            // Load saved refresh time
+            // Load saved refresh time FIRST
             loadRefreshTime();
-            
-            // Start auto refresh countdown
-            startAutoRefresh();
+
+            // Wait for settings to load, then start auto refresh
+            setTimeout(() => {
+                startAutoRefresh();
+            }, 500); // Small delay to ensure settings are loaded
         });
 
         // Close modal when clicking outside

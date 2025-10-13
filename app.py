@@ -496,33 +496,50 @@ def get_unchanged_accounts():
     collection = get_mongo_collection()
     if collection is None:
         return []
-    
+
     try:
         # Get online servers
         servers = get_all_servers()
         online_machines = [s['ten_may'] for s in servers if s['online']]
-        
+
+        if not online_machines:
+            print("⚠️ No online machines found for unchanged accounts check")
+            return []
+
         # Get profit reports for online machines
         profit_collection = collection.database[PROFIT_REPORTS_COLLECTION]
         unchanged_accounts = []
-        
+
+        print(f"🔍 Checking {len(online_machines)} online machines for unchanged accounts (based on money comparison)")
+
         for machine in online_machines:
             report = profit_collection.find_one({'ten_may': machine})
             if report and 'report' in report:
+                print(f"📋 Machine {machine}: Found {len(report['report'])} accounts")
                 for acc in report['report']:
-                    status = (acc.get('status', '') or '').lower().strip()
-                    if 'không đổi' in status or status == 'không đổi':
+                    old_money = acc.get('old', 0) or 0
+                    new_money = acc.get('new', 0) or 0
+                    profit = acc.get('profit', 0) or 0
+
+                    print(f"  Account {acc.get('account', 'N/A')}: old={old_money}, new={new_money}, profit={profit}")
+
+                    # Check if money is unchanged (old == new)
+                    if old_money == new_money or profit == 0:
+                        print(f"    ✅ Found unchanged account: {acc.get('account', 'N/A')} (money unchanged)")
                         unchanged_accounts.append({
                             'machine': machine,
                             'account': acc.get('account', 'N/A'),
-                            'profit': acc.get('profit', 0),
-                            'old': acc.get('old', 0),
-                            'new': acc.get('new', 0)
+                            'profit': profit,
+                            'old': old_money,
+                            'new': new_money
                         })
-        
+
+        print(f"📊 Total unchanged accounts found: {len(unchanged_accounts)}")
         return unchanged_accounts
     except Exception as e:
         print(f"❌ Error getting unchanged accounts: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 
@@ -531,33 +548,50 @@ def get_decreased_accounts():
     collection = get_mongo_collection()
     if collection is None:
         return []
-    
+
     try:
         # Get online servers
         servers = get_all_servers()
         online_machines = [s['ten_may'] for s in servers if s['online']]
-        
+
+        if not online_machines:
+            print("⚠️ No online machines found for decreased accounts check")
+            return []
+
         # Get profit reports for online machines
         profit_collection = collection.database[PROFIT_REPORTS_COLLECTION]
         decreased_accounts = []
-        
+
+        print(f"🔍 Checking {len(online_machines)} online machines for decreased accounts (based on money comparison)")
+
         for machine in online_machines:
             report = profit_collection.find_one({'ten_may': machine})
             if report and 'report' in report:
+                print(f"📋 Machine {machine}: Found {len(report['report'])} accounts")
                 for acc in report['report']:
-                    status = (acc.get('status', '') or '').lower().strip()
-                    if 'giảm' in status or status == 'giảm':
+                    old_money = acc.get('old', 0) or 0
+                    new_money = acc.get('new', 0) or 0
+                    profit = acc.get('profit', 0) or 0
+
+                    print(f"  Account {acc.get('account', 'N/A')}: old={old_money}, new={new_money}, profit={profit}")
+
+                    # Check if money decreased (new < old)
+                    if new_money < old_money and profit < 0:
+                        print(f"    ✅ Found decreased account: {acc.get('account', 'N/A')} (money decreased)")
                         decreased_accounts.append({
                             'machine': machine,
                             'account': acc.get('account', 'N/A'),
-                            'profit': acc.get('profit', 0),
-                            'old': acc.get('old', 0),
-                            'new': acc.get('new', 0)
+                            'profit': profit,
+                            'old': old_money,
+                            'new': new_money
                         })
-        
+
+        print(f"📉 Total decreased accounts found: {len(decreased_accounts)}")
         return decreased_accounts
     except Exception as e:
         print(f"❌ Error getting decreased accounts: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 
@@ -587,10 +621,14 @@ def check_and_notify_offline_servers():
         unchanged_accounts = get_unchanged_accounts()
         decreased_accounts = get_decreased_accounts()
 
+        print(f"🔍 Debug: Found {len(offline_servers)} offline servers, {len(unchanged_accounts)} unchanged accounts, {len(decreased_accounts)} decreased accounts")
+
         # Send Discord notification if there are issues
         if (offline_servers or unchanged_accounts or decreased_accounts) and DISCORD_WEBHOOK_URL:
             send_comprehensive_discord_notification(offline_servers, unchanged_accounts, decreased_accounts)
             print(f"✅ Sent comprehensive Discord notification")
+        else:
+            print(f"⚠️ No issues found or Discord webhook not configured")
 
         # Log results
         if offline_servers:
@@ -605,6 +643,8 @@ def check_and_notify_offline_servers():
 
     except Exception as e:
         print(f"❌ Error checking offline servers: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def start_monitoring_thread():
