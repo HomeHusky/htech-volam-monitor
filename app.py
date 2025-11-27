@@ -591,6 +591,7 @@ def get_decreased_accounts():
 
                     # Check for negative statuses: "Chưa đạt KPI", "Chưa đạt", "Giảm"
                     # IMPORTANT: Check negative statuses FIRST (because "chưa đạt kpi" contains "đạt kpi")
+                    # NOTE: "Đạt 50% KPI" is NOT considered negative - it's neutral/yellow
                     is_decreased = (
                         'chưa đạt kpi' in normalized_status or
                         'chưa đạt' in normalized_status or
