@@ -532,7 +532,7 @@ def get_unchanged_accounts():
                         normalized_status == 'khôngđổi' or
                         normalized_status == 'k đổi' or
                         (not normalized_status) or  # Empty status
-                        (not any(keyword in normalized_status for keyword in ['tăng', 'giảm', 'chưa đạt', 'đạt kpi']))
+                        (not any(keyword in normalized_status for keyword in ['tăng', 'giảm', 'chưa đạt', 'đạt kpi', 'đạt 50% kpi']))
                     )
 
                     if is_unchanged:
