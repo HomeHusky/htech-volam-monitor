@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline'; default-src 'self'; style-src 'self' 'unsafe-inline';">
     <title>Server Monitor - Htech Volam</title>
     <style>
         * {
@@ -981,6 +982,17 @@
 
 
     <script>
+        console.log('🔍 Script tag loaded - testing basic JavaScript');
+        
+        // Test basic functionality
+        try {
+            console.log('✅ Basic JavaScript working');
+            document.addEventListener('DOMContentLoaded', function() {
+                console.log('🚀 DOM Content Loaded - JavaScript working!');
+            });
+        } catch(e) {
+            console.error('❌ Basic JavaScript failed:', e);
+        }
         // Auto refresh configuration
         let AUTO_REFRESH_TIME = 1800000; // Default: 30 minutes (1800000ms)
         let refreshTimeout;
@@ -1546,6 +1558,14 @@
 
         // Initialize on page load
         window.addEventListener('load', function() {
+            console.log('🚀 Page loaded - JavaScript working!');
+            
+            // Global error handler
+            window.onerror = function(msg, url, line, col, error) {
+                console.error('❌ JavaScript Error:', msg, 'at', url + ':' + line);
+                return false;
+            };
+            
             // Load saved refresh time FIRST
             loadRefreshTime();
 
