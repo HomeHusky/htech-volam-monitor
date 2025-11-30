@@ -1392,6 +1392,9 @@
                                 // Normalize status for comparison (lowercase and trim)
                                 const normalizedStatus = (acc.status || '').toLowerCase().trim();
                                 
+                                // Debug: log status để kiểm tra
+                                console.log('Tab Tổng quan - Account:', acc.account, 'Status:', acc.status, 'Normalized:', normalizedStatus);
+                                
                                 // IMPORTANT: Check negative statuses FIRST (before checking positive ones)
                                 // Because "chưa đạt kpi" contains "đạt kpi"
                                 // Red for negative statuses: "Chưa đạt KPI" and "Giảm"
