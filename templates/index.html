@@ -984,11 +984,22 @@
     <script>
         console.log('🔍 Script tag loaded - testing basic JavaScript');
         
+        // Create debug div for production debugging
+        function createDebugDiv() {
+            const div = document.createElement('div');
+            div.id = 'debug-info';
+            div.style.cssText = 'position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.8); color: white; padding: 10px; font-size: 12px; z-index: 9999; max-width: 300px; max-height: 200px; overflow-y: auto;';
+            document.body.appendChild(div);
+            return div;
+        }
+        
         // Test basic functionality
         try {
             console.log('✅ Basic JavaScript working');
+            const debugDiv = createDebugDiv();
+            debugDiv.innerHTML = '🚀 JavaScript working!<br>';
             document.addEventListener('DOMContentLoaded', function() {
-                console.log('🚀 DOM Content Loaded - JavaScript working!');
+                debugDiv.innerHTML += '🚀 DOM Loaded!<br>';
             });
         } catch(e) {
             console.error('❌ Basic JavaScript failed:', e);
@@ -1118,6 +1129,10 @@
 
         // Tab switching
         function switchTab(tabName) {
+            // Debug UI instead of console
+            const debugDiv = document.getElementById('debug-info') || createDebugDiv();
+            debugDiv.innerHTML += `🔄 switchTab: ${tabName}<br>`;
+            
             console.log('🔄 switchTab called with:', tabName, '- v2.0');
             // Hide all tab contents
             const tabContents = document.querySelectorAll('.tab-content');
@@ -1300,6 +1315,9 @@
         }
 
         function loadProfitTable() {
+            const debugDiv = document.getElementById('debug-info');
+            if (debugDiv) debugDiv.innerHTML += '🔄 loadProfitTable called!<br>';
+            
             console.log('🔄 loadProfitTable() called - v2.0');
             const modalContent = document.getElementById('profit-table-content');
             
