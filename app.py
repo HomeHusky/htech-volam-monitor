@@ -15,6 +15,16 @@ import requests
 import json
 import threading
 import time
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Debug: Check if .env values are loaded
+print("🔍 Debug - Environment variables:")
+print(f"MONGO_URI: {os.environ.get('MONGO_URI', 'NOT SET')}")
+print(f"DB_NAME: {os.environ.get('DB_NAME', 'NOT SET')}")
+print(f"DISCORD_WEBHOOK_URL: {os.environ.get('DISCORD_WEBHOOK_URL', 'NOT SET')}")
 
 app = Flask(__name__)
 
