@@ -1286,6 +1286,7 @@
         }
 
         function loadProfitTable() {
+            console.log('🔄 loadProfitTable() called');
             const modalContent = document.getElementById('profit-table-content');
             
             modalContent.innerHTML = '<div class="no-data">Đang tải dữ liệu...</div>';
@@ -1406,6 +1407,7 @@
                                 // Yellow for 50% KPI achievement: "Đạt 50% KPI"
                                 else if (normalizedStatus.includes('đạt 50% kpi') || normalizedStatus.includes('dat 50% kpi')) {
                                     statusClass = 'status-dat-50-kpi';
+                                    console.log('✅ Found 50% KPI:', acc.account, 'Status:', acc.status, 'Class:', statusClass);
                                 }
                                 // Green for positive statuses: "Tăng" and "Đạt KPI"
                                 else if (normalizedStatus.includes('tăng') || normalizedStatus.includes('đạt kpi')) {
