@@ -1106,7 +1106,7 @@
 
         // Tab switching
         function switchTab(tabName) {
-            console.log('🔄 switchTab called with:', tabName);
+            console.log('🔄 switchTab called with:', tabName, '- v2.0');
             // Hide all tab contents
             const tabContents = document.querySelectorAll('.tab-content');
             tabContents.forEach(content => {
@@ -1288,7 +1288,7 @@
         }
 
         function loadProfitTable() {
-            console.log('🔄 loadProfitTable() called');
+            console.log('🔄 loadProfitTable() called - v2.0');
             const modalContent = document.getElementById('profit-table-content');
             
             modalContent.innerHTML = '<div class="no-data">Đang tải dữ liệu...</div>';
