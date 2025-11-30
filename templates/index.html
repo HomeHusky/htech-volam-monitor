@@ -1498,7 +1498,23 @@
                     `;
                     
                     data.report.forEach(item => {
-                        let profitClass = 'profit-zero'; // default\n                        if (item.status === 'tăng') {\n                            profitClass = 'profit-positive';\n                        } else if (item.status === 'Đạt 50% KPI') {\n                            profitClass = 'profit-warning';\n                        } else if (item.status === 'chưa đạt KPI') {\n                            profitClass = 'profit-negative';\n                        }
+                        let profitClass = 'profit-zero'; // default
+                        
+                        // Debug: log status để kiểm tra
+                        console.log('Account status:', item.status, '- Account:', item.account);
+                        
+                        // Normalize status để so sánh linh hoạt hơn
+                        const normalizedStatus = (item.status || '').toString().toLowerCase().trim();
+                        
+                        if (normalizedStatus === 'tăng') {
+                            profitClass = 'profit-positive';
+                        } else if (normalizedStatus.includes('đạt 50% kpi') || normalizedStatus.includes('dat 50% kpi')) {
+                            profitClass = 'profit-warning';
+                        } else if (normalizedStatus.includes('chưa đạt kpi') || normalizedStatus.includes('chưa đạt')) {
+                            profitClass = 'profit-negative';
+                        } else if (normalizedStatus.includes('không đổi') || normalizedStatus.includes('k đổi') || normalizedStatus === '') {
+                            profitClass = 'profit-zero';
+                        }
                         html += `
                             <tr>
                                 <td>${item.account}</td>
