@@ -1394,6 +1394,8 @@
                                 
                                 // Debug: log status để kiểm tra
                                 console.log('Tab Tổng quan - Account:', acc.account, 'Status:', acc.status, 'Normalized:', normalizedStatus);
+                                console.log('Check includes 50% kpi:', normalizedStatus.includes('đạt 50% kpi'), normalizedStatus.includes('dat 50% kpi'));
+                                console.log('Status length:', normalizedStatus.length, 'Chars:', Array.from(normalizedStatus));
                                 
                                 // IMPORTANT: Check negative statuses FIRST (before checking positive ones)
                                 // Because "chưa đạt kpi" contains "đạt kpi"
