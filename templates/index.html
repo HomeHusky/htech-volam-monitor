@@ -796,6 +796,7 @@
                 <div class="tabs" id="tabs-menu">
                     <button class="tab active" onclick="switchTab('overview')">Tổng quan</button>
                     <button class="tab" onclick="switchTab('profit-table')">Bảng tổng hợp</button>
+                    <button class="tab" onclick="switchTab('problem-accounts')">Account vấn đề</button>
                     <button class="tab" onclick="switchTab('settings')">Cài đặt</button>
                 </div>
             </div>
@@ -912,6 +913,16 @@
         </div>
         <!-- End Tab: Profit Table -->
 
+        <!-- Tab: Problem Accounts -->
+        <div id="tab-problem-accounts" class="tab-content">
+            <div class="profit-table-container">
+                <div id="problem-accounts-content">
+                    <div class="no-data">Đang tải dữ liệu...</div>
+                </div>
+            </div>
+        </div>
+        <!-- End Tab: Problem Accounts -->
+
         <!-- Tab: Settings -->
         <div id="tab-settings" class="tab-content">
             <div class="settings-content">
@@ -988,7 +999,22 @@
         function createDebugDiv() {
             const div = document.createElement('div');
             div.id = 'debug-info';
-            div.style.cssText = 'position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.8); color: white; padding: 10px; font-size: 12px; z-index: 9999; max-width: 300px; max-height: 200px; overflow-y: auto;';
+            div.style.cssText = 'position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.8); color: white; padding: 10px; font-size: 12px; z-index: 9999; max-width: 300px; max-height: 200px; overflow-y: auto; cursor: pointer;';
+            div.innerHTML = '🔍 Debug Mode<br>Click to hide';
+            
+            // Auto hide after 10 seconds
+            setTimeout(() => {
+                if (div.parentNode) {
+                    div.style.opacity = '0.3';
+                    setTimeout(() => {
+                        if (div.parentNode) div.remove();
+                    }, 2000);
+                }
+            }, 10000);
+            
+            // Click to hide immediately
+            div.onclick = () => div.remove();
+            
             document.body.appendChild(div);
             return div;
         }
@@ -1163,6 +1189,9 @@
             if (tabName === 'profit-table') {
                 console.log('✅ Loading profit table...');
                 loadProfitTable();
+            } else if (tabName === 'problem-accounts') {
+                console.log('✅ Loading problem accounts...');
+                loadProblemAccounts();
             } else if (tabName === 'settings') {
                 loadExcludedServers();
                 loadServerNames();
@@ -1571,6 +1600,169 @@
                 .catch(error => {
                     modalContent.innerHTML = '<div class="no-data">Lỗi khi tải dữ liệu</div>';
                     console.error('Error fetching profit data:', error);
+                });
+        }
+
+        // Load problem accounts table
+        function loadProblemAccounts() {
+            const modalContent = document.getElementById('problem-accounts-content');
+            
+            modalContent.innerHTML = '<div class="no-data">Đang tải dữ liệu...</div>';
+            
+            // Fetch all profits data and server status
+            Promise.all([
+                fetch('/api/all-profits').then(r => r.json()),
+                fetch('/api/servers').then(r => r.json())
+            ])
+                .then(([profitData, serverData]) => {
+                    if (!profitData || profitData.length === 0) {
+                        modalContent.innerHTML = '<div class="no-data">Không có dữ liệu doanh thu</div>';
+                        return;
+                    }
+                    
+                    // Create a map of online servers
+                    const onlineServers = new Set();
+                    serverData.forEach(server => {
+                        if (server.online) {
+                            onlineServers.add(server.ten_may);
+                        }
+                    });
+                    
+                    // Filter only online machines
+                    const data = profitData.filter(item => onlineServers.has(item.ten_may));
+                    
+                    if (data.length === 0) {
+                        modalContent.innerHTML = '<div class="no-data">Không có máy nào đang online</div>';
+                        return;
+                    }
+                    
+                    // Sort by machine number
+                    data.sort((a, b) => {
+                        const numA = parseInt(a.ten_may.match(/\d+/)?.[0] || '0');
+                        const numB = parseInt(b.ten_may.match(/\d+/)?.[0] || '0');
+                        return numA - numB;
+                    });
+                    
+                    // Build machine data structure
+                    const machines = [];
+                    const machineAccounts = {};
+                    
+                    data.forEach(machineData => {
+                        machines.push(machineData.ten_may);
+                        machineAccounts[machineData.ten_may] = [];
+                        
+                        if (machineData.report && machineData.report.length > 0) {
+                            machineData.report.forEach(acc => {
+                                machineAccounts[machineData.ten_may].push({
+                                    account: acc.account,
+                                    profit: acc.profit || 0,
+                                    status: acc.status || ''
+                                });
+                            });
+                        }
+                    });
+                    
+                    // Filter problem accounts (white and red) and organize by machine
+                    const problemAccountsByMachine = {};
+                    let totalProblemCount = 0;
+                    let totalProblemProfit = 0;
+                    
+                    machines.forEach(machine => {
+                        const accounts = machineAccounts[machine] || [];
+                        problemAccountsByMachine[machine] = [];
+                        
+                        accounts.forEach(acc => {
+                            const normalizedStatus = (acc.status || '').toLowerCase().trim();
+                            const isProblem = (
+                                normalizedStatus.includes('không đổi') || 
+                                normalizedStatus.includes('k đổi') || 
+                                normalizedStatus === '' ||
+                                normalizedStatus.includes('chưa đạt kpi') || 
+                                normalizedStatus.includes('chưa đạt') || 
+                                normalizedStatus.includes('giảm')
+                            );
+                            
+                            if (isProblem) {
+                                problemAccountsByMachine[machine].push({
+                                    account: acc.account,
+                                    profit: acc.profit || 0,
+                                    status: acc.status || '',
+                                    statusClass: normalizedStatus.includes('chưa đạt kpi') || normalizedStatus.includes('chưa đạt') || normalizedStatus.includes('giảm') ? 'status-chua-dat-kpi' : 'status-other'
+                                });
+                                totalProblemCount++;
+                                totalProblemProfit += (acc.profit || 0);
+                            }
+                        });
+                    });
+
+                    // Find max problem accounts in any machine
+                    let maxProblemAccounts = 0;
+                    machines.forEach(machine => {
+                        if (problemAccountsByMachine[machine].length > maxProblemAccounts) {
+                            maxProblemAccounts = problemAccountsByMachine[machine].length;
+                        }
+                    });
+
+                    // Create problem table HTML (same structure as profit table)
+                    let html = `
+                        <div style="margin-bottom: 15px; padding: 12px; background: #fee2e2; border-radius: 8px; text-align: center;">
+                            <h3 style="margin: 0; color: #991b1b; font-size: 1.1em;">
+                                ⚠️ Các tài khoản cần chú ý (${totalProblemCount}): <span style="color: #991b1b; font-size: 1.2em;">${totalProblemProfit.toFixed(2)}</span>
+                            </h3>
+                        </div>
+                        <div style="overflow-x: auto;">
+                        <table class="all-servers-table" style="min-width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;">STT</th>
+                    `;
+                    
+                    // Add machine columns
+                    machines.forEach(machine => {
+                        html += `<th>${machine}</th>`;
+                    });
+                    
+                    html += `
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+                    
+                    // Add rows based on max problem accounts
+                    for (let i = 0; i < maxProblemAccounts; i++) {
+                        html += `<tr><td><strong>${i + 1}</strong></td>`;
+                        
+                        machines.forEach(machine => {
+                            const problemAccounts = problemAccountsByMachine[machine];
+                            if (i < problemAccounts.length) {
+                                const acc = problemAccounts[i];
+                                html += `
+                                    <td>
+                                        <div class="account-cell ${acc.statusClass}" title="Trạng thái: ${acc.status}">
+                                            <span class="account-name">${acc.account}</span>
+                                            <span class="account-profit">${acc.profit.toFixed(2)}</span>
+                                        </div>
+                                    </td>
+                                `;
+                            } else {
+                                html += `<td></td>`;
+                            }
+                        });
+                        
+                        html += `</tr>`;
+                    }
+                    
+                    html += `
+                            </tbody>
+                        </table>
+                        </div>
+                    `;
+                    
+                    modalContent.innerHTML = html;
+                })
+                .catch(error => {
+                    modalContent.innerHTML = '<div class="no-data">Lỗi khi tải dữ liệu</div>';
+                    console.error('Error fetching problem accounts data:', error);
                 });
         }
 
